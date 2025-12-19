@@ -8,7 +8,7 @@ import { InputManager } from './input';
 import { SpatialHash } from './collision';
 import { ConversionSystem } from './conversion';
 import { PLAYER_COLORS } from './types';
-import { PARTICLE_CONFIG, OBSTACLE_CONFIG } from './config';
+import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
 
 export class Game {
   private players: Player[] = [];
@@ -181,18 +181,38 @@ export class Game {
       }
     }
 
-    // Check win condition - if any player has 0 particles, they lose
+    // Check win condition
     if (this.winner === -1) {
+      this.checkWinCondition();
+    }
+  }
+
+  private checkWinCondition(): void {
+    const totalParticles = this.particles.length;
+
+    if (WIN_CONFIG.mode === 'elimination') {
+      // Elimination mode: player loses when they have <= threshold particles
       for (const player of this.players) {
-        if (player.particleCount <= 0) {
-          // Find the winner (player with particles remaining)
+        if (player.particleCount <= WIN_CONFIG.eliminationThreshold) {
+          // Find the winner (player with most particles remaining)
+          let maxParticles = -1;
           for (const p of this.players) {
-            if (p.particleCount > 0) {
+            if (p.particleCount > maxParticles) {
+              maxParticles = p.particleCount;
               this.winner = p.id;
-              console.log(`Player ${this.winner + 1} wins!`);
-              break;
             }
           }
+          console.log(`Player ${this.winner + 1} wins by elimination!`);
+          break;
+        }
+      }
+    } else if (WIN_CONFIG.mode === 'percentage') {
+      // Percentage mode: player wins when they control X% of all particles
+      for (const player of this.players) {
+        const percentage = player.particleCount / totalParticles;
+        if (percentage >= WIN_CONFIG.percentageThreshold) {
+          this.winner = player.id;
+          console.log(`Player ${this.winner + 1} wins with ${(percentage * 100).toFixed(1)}% of particles!`);
           break;
         }
       }
