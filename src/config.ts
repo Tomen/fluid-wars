@@ -78,9 +78,9 @@ export const GAME_LOOP_CONFIG = {
  * WIN CONDITION
  */
 export const WIN_CONFIG = {
-  mode: 'elimination' as 'elimination' | 'percentage', // 'elimination' = opponent loses all particles, 'percentage' = control X% of all particles
+  mode: 'percentage' as 'elimination' | 'percentage', // 'elimination' = opponent loses all particles, 'percentage' = control X% of all particles
   eliminationThreshold: 0, // particles - opponent must have this many or fewer to lose (0 = complete elimination)
-  percentageThreshold: 0.9, // ratio - control this percentage of all particles to win (only for 'percentage' mode)
+  percentageThreshold: 0.8, // ratio - control this percentage of all particles to win (only for 'percentage' mode)
 } as const;
 
 /**

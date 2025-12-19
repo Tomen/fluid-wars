@@ -27,10 +27,10 @@ export class Game {
   // Game state
   private winner: number = -1; // -1 = no winner, 0+ = player ID
 
-  constructor(config: GameConfig, canvasWidth: number, canvasHeight: number) {
+  constructor(config: GameConfig, canvasWidth: number, canvasHeight: number, headless: boolean = false) {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
-    this.input = new InputManager();
+    this.input = new InputManager(headless);
     this.spatialHash = new SpatialHash();
     this.conversionSystem = new ConversionSystem();
 

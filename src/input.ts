@@ -17,29 +17,57 @@ const PLAYER_KEYS: KeyBindings[] = [
   { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' }
 ];
 
+/**
+ * InputManager for keyboard controls
+ * Supports both browser mode (keyboard events) and headless mode (for AI training)
+ */
 export class InputManager {
   private keysPressed: Set<string> = new Set();
+  private readonly headless: boolean;
+  private keydownHandler: ((e: KeyboardEvent) => void) | null = null;
+  private keyupHandler: ((e: KeyboardEvent) => void) | null = null;
 
-  constructor() {
-    this.setupListeners();
+  /**
+   * Create an InputManager
+   * @param headless If true, skip browser event listeners (for Node.js/AI training)
+   */
+  constructor(headless: boolean = false) {
+    this.headless = headless;
+
+    if (!headless) {
+      this.setupListeners();
+    }
   }
 
   private setupListeners(): void {
-    window.addEventListener('keydown', (e) => {
+    // Check if window exists (browser environment)
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    this.keydownHandler = (e: KeyboardEvent) => {
       this.keysPressed.add(e.key.toLowerCase());
 
       // Prevent arrow keys from scrolling the page
       if (e.key.startsWith('Arrow')) {
         e.preventDefault();
       }
-    });
+    };
 
-    window.addEventListener('keyup', (e) => {
+    this.keyupHandler = (e: KeyboardEvent) => {
       this.keysPressed.delete(e.key.toLowerCase());
-    });
+    };
+
+    window.addEventListener('keydown', this.keydownHandler);
+    window.addEventListener('keyup', this.keyupHandler);
   }
 
   getPlayerInput(playerId: number): Vec2 {
+    // In headless mode, always return no input (AI will set cursor directly)
+    if (this.headless) {
+      return { x: 0, y: 0 };
+    }
+
     const bindings = PLAYER_KEYS[playerId];
     if (!bindings) {
       return { x: 0, y: 0 };
@@ -74,8 +102,24 @@ export class InputManager {
     return this.keysPressed.has(key.toLowerCase());
   }
 
+  /**
+   * Check if running in headless mode
+   */
+  isHeadless(): boolean {
+    return this.headless;
+  }
+
   destroy(): void {
-    // Clear all listeners (for cleanup if needed)
+    // Remove event listeners if they were added
+    if (typeof window !== 'undefined' && !this.headless) {
+      if (this.keydownHandler) {
+        window.removeEventListener('keydown', this.keydownHandler);
+      }
+      if (this.keyupHandler) {
+        window.removeEventListener('keyup', this.keyupHandler);
+      }
+    }
+
     this.keysPressed.clear();
   }
 }
