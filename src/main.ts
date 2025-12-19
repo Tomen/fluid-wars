@@ -3,10 +3,7 @@
 import type { AppState, GameConfig } from './types';
 import { Game } from './game';
 import { Renderer } from './renderer';
-
-// Constants
-const FIXED_DT = 1 / 60; // 60 FPS physics
-const MAX_ACCUMULATOR = 0.1; // Prevent spiral of death
+import { GAME_CONFIG, GAME_LOOP_CONFIG } from './config';
 
 class App {
   private state: AppState = 'playing'; // Start in playing state for now
@@ -31,13 +28,22 @@ class App {
     // Create renderer
     this.renderer = new Renderer(this.canvas);
 
-    // Create game with 2 players
+    // Create game with config
     const config: GameConfig = {
-      playerCount: 2,
-      particlesPerPlayer: 1250
+      playerCount: GAME_CONFIG.playerCount,
+      particlesPerPlayer: GAME_CONFIG.particlesPerPlayer
     };
 
     this.game = new Game(config, this.renderer.width, this.renderer.height);
+
+    // Setup restart key listener
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'r' || e.key === 'R') {
+        if (this.state === 'gameover') {
+          this.restartGame();
+        }
+      }
+    });
 
     console.log('Fluid Wars initialized');
     console.log(`Canvas size: ${this.renderer.width}x${this.renderer.height}`);
@@ -59,6 +65,11 @@ class App {
         // Update game
         if (this.game) {
           this.game.update(dt);
+
+          // Check for game over
+          if (this.game.isGameOver()) {
+            this.setState('gameover');
+          }
         }
         break;
     }
@@ -71,6 +82,7 @@ class App {
     // Render based on state
     switch (this.state) {
       case 'playing':
+      case 'gameover':
         if (this.game) {
           // Draw obstacles first (behind particles)
           this.renderer.drawObstacles(this.game.getObstacles());
@@ -80,6 +92,11 @@ class App {
           this.renderer.drawParticles(this.game.getParticles(), conversionProgress, convertingColors);
           // Draw player cursors on top
           this.renderer.drawPlayers(this.game.getPlayers());
+
+          // Draw victory screen overlay if game over
+          if (this.state === 'gameover') {
+            this.renderVictoryScreen();
+          }
         }
         break;
     }
@@ -106,6 +123,65 @@ class App {
     }
   }
 
+  renderVictoryScreen(): void {
+    if (!this.game) return;
+
+    const winner = this.game.getWinnerPlayer();
+    if (!winner) return;
+
+    const ctx = this.renderer.ctx;
+    const centerX = this.renderer.width / 2;
+    const centerY = this.renderer.height / 2;
+
+    // Draw semi-transparent overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
+
+    // Draw victory message
+    ctx.fillStyle = winner.color;
+    ctx.font = 'bold 72px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('VICTORY!', centerX, centerY - 80);
+
+    // Draw player info
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '36px sans-serif';
+    const playerKeys = winner.id === 0 ? 'WASD' : 'Arrows';
+    ctx.fillText(`Player ${winner.id + 1} (${playerKeys}) Wins!`, centerX, centerY);
+
+    // Draw particle count
+    ctx.font = '24px sans-serif';
+    ctx.fillText(`${winner.particleCount} particles remaining`, centerX, centerY + 50);
+
+    // Draw restart instruction
+    ctx.fillStyle = '#aaaaaa';
+    ctx.font = '20px sans-serif';
+    ctx.fillText('Press R to restart', centerX, centerY + 120);
+  }
+
+  restartGame(): void {
+    console.log('Restarting game...');
+
+    // Destroy old game
+    if (this.game) {
+      this.game.destroy();
+    }
+
+    // Create new game with same config
+    const config: GameConfig = {
+      playerCount: GAME_CONFIG.playerCount,
+      particlesPerPlayer: GAME_CONFIG.particlesPerPlayer
+    };
+
+    this.game = new Game(config, this.renderer.width, this.renderer.height);
+
+    // Reset state
+    this.setState('playing');
+
+    console.log('Game restarted');
+  }
+
   loop(timestamp: number): void {
     // Calculate frame time
     const frameTime = (timestamp - this.lastTime) / 1000;
@@ -121,12 +197,12 @@ class App {
     }
 
     // Add to accumulator (clamped to prevent spiral of death)
-    this.accumulator += Math.min(frameTime, MAX_ACCUMULATOR);
+    this.accumulator += Math.min(frameTime, GAME_LOOP_CONFIG.maxAccumulator);
 
     // Fixed timestep updates
-    while (this.accumulator >= FIXED_DT) {
-      this.update(FIXED_DT);
-      this.accumulator -= FIXED_DT;
+    while (this.accumulator >= GAME_LOOP_CONFIG.fixedDt) {
+      this.update(GAME_LOOP_CONFIG.fixedDt);
+      this.accumulator -= GAME_LOOP_CONFIG.fixedDt;
     }
 
     // Render

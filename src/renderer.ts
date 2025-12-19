@@ -3,11 +3,10 @@
 import type { Particle } from './particle';
 import type { Obstacle } from './obstacle';
 import type { Player } from './player';
-
-const BACKGROUND_COLOR = '#0a0a0f';
+import { RENDER_CONFIG } from './config';
 
 export class Renderer {
-  private readonly ctx: CanvasRenderingContext2D;
+  readonly ctx: CanvasRenderingContext2D;
   readonly width: number;
   readonly height: number;
 
@@ -23,7 +22,7 @@ export class Renderer {
   }
 
   clear(): void {
-    this.ctx.fillStyle = BACKGROUND_COLOR;
+    this.ctx.fillStyle = RENDER_CONFIG.backgroundColor;
     this.ctx.fillRect(0, 0, this.width, this.height);
   }
 

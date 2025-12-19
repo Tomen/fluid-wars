@@ -8,6 +8,7 @@ import { InputManager } from './input';
 import { SpatialHash } from './collision';
 import { ConversionSystem } from './conversion';
 import { PLAYER_COLORS } from './types';
+import { PARTICLE_CONFIG, OBSTACLE_CONFIG } from './config';
 
 export class Game {
   private players: Player[] = [];
@@ -18,6 +19,13 @@ export class Game {
   private conversionSystem: ConversionSystem;
   private canvasWidth: number;
   private canvasHeight: number;
+
+  // Cache conversion data to avoid recalculating every frame
+  private conversionProgressCache: Map<Particle, number> = new Map();
+  private convertingPlayerColorCache: Map<Particle, string> = new Map();
+
+  // Game state
+  private winner: number = -1; // -1 = no winner, 0+ = player ID
 
   constructor(config: GameConfig, canvasWidth: number, canvasHeight: number) {
     this.canvasWidth = canvasWidth;
@@ -59,7 +67,7 @@ export class Game {
     // Spawn particles near each player's cursor
     for (let playerId = 0; playerId < playerCount; playerId++) {
       const player = this.players[playerId];
-      const spawnRadius = 150; // Radius around cursor to spawn particles
+      const spawnRadius = PARTICLE_CONFIG.spawnRadius;
 
       for (let i = 0; i < particlesPerPlayer; i++) {
         // Random angle and distance from cursor
@@ -84,9 +92,7 @@ export class Game {
 
   private initObstacles(): void {
     // Create maze-like checker pattern of obstacles
-    const obstacleSize = 40; // Size of each obstacle square
-    const gridSpacing = 100; // Distance between obstacle centers
-    const margin = 100; // Margin from edges
+    const { size, gridSpacing, margin } = OBSTACLE_CONFIG;
 
     // Calculate grid dimensions
     const cols = Math.floor((this.canvasWidth - 2 * margin) / gridSpacing);
@@ -102,10 +108,10 @@ export class Game {
 
           this.obstacles.push(new Obstacle({
             type: 'rect',
-            x: x - obstacleSize / 2,
-            y: y - obstacleSize / 2,
-            width: obstacleSize,
-            height: obstacleSize
+            x: x - size / 2,
+            y: y - size / 2,
+            width: size,
+            height: size
           }));
         }
       }
@@ -127,6 +133,10 @@ export class Game {
     for (const particle of this.particles) {
       this.spatialHash.insert(particle);
     }
+
+    // Clear conversion caches
+    this.conversionProgressCache.clear();
+    this.convertingPlayerColorCache.clear();
 
     // Update particles - each particle follows its owner's cursor
     for (const particle of this.particles) {
@@ -155,8 +165,35 @@ export class Game {
           // Transfer ownership
           particle.owner = newOwner;
           particle.color = this.players[newOwner].color;
+        }
+      }
 
-          console.log(`Particle converted to Player ${newOwner + 1}!`);
+      // Cache conversion data for rendering (avoid recalculating each frame)
+      const progress = this.conversionSystem.getProgress(particle);
+      if (progress > 0) {
+        this.conversionProgressCache.set(particle, progress);
+
+        // Find dominant enemy player for color
+        const dominantPlayer = this.conversionSystem.getDominantEnemyPlayer(particle, nearbyParticles);
+        if (dominantPlayer !== -1) {
+          this.convertingPlayerColorCache.set(particle, this.players[dominantPlayer].color);
+        }
+      }
+    }
+
+    // Check win condition - if any player has 0 particles, they lose
+    if (this.winner === -1) {
+      for (const player of this.players) {
+        if (player.particleCount <= 0) {
+          // Find the winner (player with particles remaining)
+          for (const p of this.players) {
+            if (p.particleCount > 0) {
+              this.winner = p.id;
+              console.log(`Player ${this.winner + 1} wins!`);
+              break;
+            }
+          }
+          break;
         }
       }
     }
@@ -186,35 +223,24 @@ export class Game {
   }
 
   getConversionProgressMap(): Map<Particle, number> {
-    const progressMap = new Map<Particle, number>();
-
-    for (const particle of this.particles) {
-      const progress = this.conversionSystem.getProgress(particle);
-      if (progress > 0) {
-        progressMap.set(particle, progress);
-      }
-    }
-
-    return progressMap;
+    return this.conversionProgressCache;
   }
 
   getConvertingPlayerColorMap(): Map<Particle, string> {
-    const colorMap = new Map<Particle, string>();
+    return this.convertingPlayerColorCache;
+  }
 
-    for (const particle of this.particles) {
-      const progress = this.conversionSystem.getProgress(particle);
-      if (progress > 0) {
-        // Query nearby particles to find dominant enemy
-        const nearbyParticles = this.spatialHash.queryNearby(particle.x, particle.y);
-        const dominantPlayer = this.conversionSystem.getDominantEnemyPlayer(particle, nearbyParticles);
+  isGameOver(): boolean {
+    return this.winner !== -1;
+  }
 
-        if (dominantPlayer !== -1) {
-          colorMap.set(particle, this.players[dominantPlayer].color);
-        }
-      }
-    }
+  getWinner(): number {
+    return this.winner;
+  }
 
-    return colorMap;
+  getWinnerPlayer(): Player | null {
+    if (this.winner === -1) return null;
+    return this.players[this.winner];
   }
 
   destroy(): void {

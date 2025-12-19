@@ -2,11 +2,7 @@
 
 import type { Particle } from './particle';
 import { distance } from './utils';
-
-// Conversion constants
-const CONVERSION_RADIUS = 20; // Distance at which conversion can occur (larger than repulsion)
-const CONVERSION_RATE = 0.3; // Progress per second when outnumbered
-const CONVERSION_THRESHOLD = 1.0; // Amount of progress needed to convert
+import { CONVERSION_CONFIG } from './config';
 
 export interface ConversionProgress {
   particleId: number;
@@ -30,7 +26,7 @@ export class ConversionSystem {
 
       const dist = distance(particle.x, particle.y, other.x, other.y);
 
-      if (dist < CONVERSION_RADIUS) {
+      if (dist < CONVERSION_CONFIG.radius) {
         if (other.owner === particle.owner) {
           friendlyCount++;
         } else {
@@ -48,12 +44,12 @@ export class ConversionSystem {
     // If outnumbered, build up conversion progress
     if (enemyCount > friendlyCount) {
       const currentProgress = this.conversionProgress.get(particle) || 0;
-      const newProgress = currentProgress + CONVERSION_RATE * dt;
+      const newProgress = currentProgress + CONVERSION_CONFIG.rate * dt;
 
       this.conversionProgress.set(particle, newProgress);
 
       // Check if particle should be converted
-      if (newProgress >= CONVERSION_THRESHOLD) {
+      if (newProgress >= CONVERSION_CONFIG.threshold) {
         this.conversionProgress.delete(particle);
         return true; // Signal that conversion happened
       }
@@ -77,7 +73,7 @@ export class ConversionSystem {
 
       const dist = distance(particle.x, particle.y, other.x, other.y);
 
-      if (dist < CONVERSION_RADIUS) {
+      if (dist < CONVERSION_CONFIG.radius) {
         const count = enemyCounts.get(other.owner) || 0;
         enemyCounts.set(other.owner, count + 1);
       }
@@ -104,7 +100,7 @@ export class ConversionSystem {
     const currentProgress = this.conversionProgress.get(particle);
 
     if (currentProgress !== undefined) {
-      const newProgress = Math.max(0, currentProgress - CONVERSION_RATE * 2 * dt);
+      const newProgress = Math.max(0, currentProgress - CONVERSION_CONFIG.rate * CONVERSION_CONFIG.decayMultiplier * dt);
 
       if (newProgress <= 0) {
         this.conversionProgress.delete(particle);

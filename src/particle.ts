@@ -3,22 +3,14 @@
 import type { Vec2 } from './types';
 import type { Obstacle } from './obstacle';
 import { distance, normalize, length, clamp } from './utils';
-
-// Physics constants
-const ACCELERATION = 200; // units/sec²
-const MAX_VELOCITY = 150; // units/sec
-const FRICTION = 0.98; // per frame
-const PARTICLE_RADIUS = 4;
-const REPULSION_RADIUS = 12; // Distance at which particles repel each other
-const REPULSION_STRENGTH = 100; // Force of repulsion
-const ENEMY_REPULSION_MULTIPLIER = 2.5; // Extra repulsion between enemy particles for clash effect
+import { PARTICLE_CONFIG } from './config';
 
 export class Particle {
   x: number;
   y: number;
   vx: number = 0;
   vy: number = 0;
-  readonly radius: number = PARTICLE_RADIUS;
+  readonly radius: number = PARTICLE_CONFIG.radius;
   color: string = '#4488ff'; // Default blue
   owner: number = 0; // Player ID who owns this particle
 
@@ -66,21 +58,21 @@ export class Particle {
     const dir = normalize(dx, dy);
 
     // Apply acceleration in that direction
-    this.vx += dir.x * ACCELERATION * dt;
-    this.vy += dir.y * ACCELERATION * dt;
+    this.vx += dir.x * PARTICLE_CONFIG.acceleration * dt;
+    this.vy += dir.y * PARTICLE_CONFIG.acceleration * dt;
 
     // Cap velocity to max
     const speed = length(this.vx, this.vy);
-    if (speed > MAX_VELOCITY) {
-      const scale = MAX_VELOCITY / speed;
+    if (speed > PARTICLE_CONFIG.maxVelocity) {
+      const scale = PARTICLE_CONFIG.maxVelocity / speed;
       this.vx *= scale;
       this.vy *= scale;
     }
   }
 
   private applyFriction(): void {
-    this.vx *= FRICTION;
-    this.vy *= FRICTION;
+    this.vx *= PARTICLE_CONFIG.friction;
+    this.vy *= PARTICLE_CONFIG.friction;
   }
 
   private applySoftRepulsion(nearbyParticles: Particle[], dt: number): void {
@@ -93,18 +85,18 @@ export class Particle {
       const dist = distance(this.x, this.y, other.x, other.y);
 
       // If within repulsion radius, apply repulsion force
-      if (dist < REPULSION_RADIUS && dist > 0.1) {
+      if (dist < PARTICLE_CONFIG.repulsionRadius && dist > 0.1) {
         // Calculate repulsion direction (away from other particle)
         const dx = this.x - other.x;
         const dy = this.y - other.y;
         const dir = normalize(dx, dy);
 
         // Stronger repulsion when closer
-        let strength = REPULSION_STRENGTH * (1 - dist / REPULSION_RADIUS);
+        let strength = PARTICLE_CONFIG.repulsionStrength * (1 - dist / PARTICLE_CONFIG.repulsionRadius);
 
         // Apply extra repulsion between enemy particles to create clash effect
         if (other.owner !== this.owner) {
-          strength *= ENEMY_REPULSION_MULTIPLIER;
+          strength *= PARTICLE_CONFIG.enemyRepulsionMultiplier;
         }
 
         // Apply repulsion force

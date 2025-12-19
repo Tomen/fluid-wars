@@ -2,9 +2,7 @@
 
 import type { Vec2 } from './types';
 import { clamp } from './utils';
-
-const CURSOR_SPEED = 300; // units/sec
-const CURSOR_RADIUS = 8;
+import { PLAYER_CONFIG } from './config';
 
 export class Player {
   readonly id: number;
@@ -24,22 +22,24 @@ export class Player {
 
   updateCursor(input: Vec2, dt: number, canvasWidth: number, canvasHeight: number): void {
     // Move cursor based on input direction (normalized vector expected)
-    this.cursorX += input.x * CURSOR_SPEED * dt;
-    this.cursorY += input.y * CURSOR_SPEED * dt;
+    this.cursorX += input.x * PLAYER_CONFIG.cursorSpeed * dt;
+    this.cursorY += input.y * PLAYER_CONFIG.cursorSpeed * dt;
 
     // Keep cursor within bounds
-    this.cursorX = clamp(this.cursorX, CURSOR_RADIUS, canvasWidth - CURSOR_RADIUS);
-    this.cursorY = clamp(this.cursorY, CURSOR_RADIUS, canvasHeight - CURSOR_RADIUS);
+    this.cursorX = clamp(this.cursorX, PLAYER_CONFIG.cursorRadius, canvasWidth - PLAYER_CONFIG.cursorRadius);
+    this.cursorY = clamp(this.cursorY, PLAYER_CONFIG.cursorRadius, canvasHeight - PLAYER_CONFIG.cursorRadius);
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
+    const r = PLAYER_CONFIG.cursorRadius;
+
     // Draw cursor as a circle with color
     ctx.fillStyle = this.color;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 2;
 
     ctx.beginPath();
-    ctx.arc(this.cursorX, this.cursorY, CURSOR_RADIUS, 0, Math.PI * 2);
+    ctx.arc(this.cursorX, this.cursorY, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
@@ -47,10 +47,10 @@ export class Player {
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(this.cursorX - CURSOR_RADIUS - 4, this.cursorY);
-    ctx.lineTo(this.cursorX + CURSOR_RADIUS + 4, this.cursorY);
-    ctx.moveTo(this.cursorX, this.cursorY - CURSOR_RADIUS - 4);
-    ctx.lineTo(this.cursorX, this.cursorY + CURSOR_RADIUS + 4);
+    ctx.moveTo(this.cursorX - r - 4, this.cursorY);
+    ctx.lineTo(this.cursorX + r + 4, this.cursorY);
+    ctx.moveTo(this.cursorX, this.cursorY - r - 4);
+    ctx.lineTo(this.cursorX, this.cursorY + r + 4);
     ctx.stroke();
   }
 }

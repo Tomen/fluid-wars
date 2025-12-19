@@ -2,8 +2,7 @@
 
 import type { Vec2, ObstacleData, RectObstacle, CircleObstacle } from './types';
 import { clamp } from './utils';
-
-const BOUNCE_ENERGY_LOSS = 0.8;
+import { OBSTACLE_CONFIG } from './config';
 
 export class Obstacle {
   readonly type: 'rect' | 'circle';
@@ -90,8 +89,8 @@ export class Obstacle {
           particle.vy -= 2 * velDotNormal * normalY;
 
           // Apply energy loss
-          particle.vx *= BOUNCE_ENERGY_LOSS;
-          particle.vy *= BOUNCE_ENERGY_LOSS;
+          particle.vx *= OBSTACLE_CONFIG.bounceEnergyLoss;
+          particle.vy *= OBSTACLE_CONFIG.bounceEnergyLoss;
         }
       } else {
         // Particle center is exactly on obstacle surface - push away slightly

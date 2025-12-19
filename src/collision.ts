@@ -1,14 +1,13 @@
 // Spatial hashing for efficient collision detection
 
 import type { Particle } from './particle';
-
-const CELL_SIZE = 50; // Size of each grid cell (should be >= max interaction distance)
+import { SPATIAL_CONFIG } from './config';
 
 export class SpatialHash {
   private grid: Map<string, Particle[]> = new Map();
   private readonly cellSize: number;
 
-  constructor(cellSize: number = CELL_SIZE) {
+  constructor(cellSize: number = SPATIAL_CONFIG.cellSize) {
     this.cellSize = cellSize;
   }
 
