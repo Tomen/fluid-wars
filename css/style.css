@@ -1,0 +1,29 @@
+/* Reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #0a0a0f;
+  font-family: 'Arial', sans-serif;
+  color: #ffffff;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+#menu-container {
+  position: absolute;
+  z-index: 10;
+  display: none;
+}
+
+#game-canvas {
+  border: 2px solid #222;
+  background: #0a0a0f;
+  display: block;
+}
