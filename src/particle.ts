@@ -11,6 +11,7 @@ const FRICTION = 0.98; // per frame
 const PARTICLE_RADIUS = 4;
 const REPULSION_RADIUS = 12; // Distance at which particles repel each other
 const REPULSION_STRENGTH = 100; // Force of repulsion
+const ENEMY_REPULSION_MULTIPLIER = 2.5; // Extra repulsion between enemy particles for clash effect
 
 export class Particle {
   x: number;
@@ -19,18 +20,19 @@ export class Particle {
   vy: number = 0;
   readonly radius: number = PARTICLE_RADIUS;
   color: string = '#4488ff'; // Default blue
+  owner: number = 0; // Player ID who owns this particle
 
   constructor(x: number, y: number) {
     this.x = x;
     this.y = y;
   }
 
-  update(dt: number, cursorPos: Vec2, canvasWidth: number, canvasHeight: number, allParticles: Particle[], obstacles: Obstacle[]): void {
+  update(dt: number, cursorPos: Vec2, canvasWidth: number, canvasHeight: number, nearbyParticles: Particle[], obstacles: Obstacle[]): void {
     // Apply acceleration toward cursor
     this.applyAcceleration(cursorPos, dt);
 
     // Apply soft repulsion from nearby particles
-    this.applySoftRepulsion(allParticles, dt);
+    this.applySoftRepulsion(nearbyParticles, dt);
 
     // Apply friction
     this.applyFriction();
@@ -81,9 +83,9 @@ export class Particle {
     this.vy *= FRICTION;
   }
 
-  private applySoftRepulsion(allParticles: Particle[], dt: number): void {
-    // Check all other particles for repulsion
-    for (const other of allParticles) {
+  private applySoftRepulsion(nearbyParticles: Particle[], dt: number): void {
+    // Check nearby particles for repulsion (provided by spatial hash)
+    for (const other of nearbyParticles) {
       // Skip self
       if (other === this) continue;
 
@@ -98,7 +100,12 @@ export class Particle {
         const dir = normalize(dx, dy);
 
         // Stronger repulsion when closer
-        const strength = REPULSION_STRENGTH * (1 - dist / REPULSION_RADIUS);
+        let strength = REPULSION_STRENGTH * (1 - dist / REPULSION_RADIUS);
+
+        // Apply extra repulsion between enemy particles to create clash effect
+        if (other.owner !== this.owner) {
+          strength *= ENEMY_REPULSION_MULTIPLIER;
+        }
 
         // Apply repulsion force
         this.vx += dir.x * strength * dt;
@@ -107,10 +114,22 @@ export class Particle {
     }
   }
 
-  draw(ctx: CanvasRenderingContext2D): void {
+  draw(ctx: CanvasRenderingContext2D, conversionProgress?: number, convertingPlayerColor?: string): void {
     ctx.fillStyle = this.color;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
+
+    // Draw conversion progress indicator if being converted
+    if (conversionProgress !== undefined && conversionProgress > 0 && convertingPlayerColor) {
+      const progressRadius = this.radius + 2;
+      const progressAngle = conversionProgress * Math.PI * 2;
+
+      ctx.strokeStyle = convertingPlayerColor; // Color of the player doing the converting
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, progressRadius, -Math.PI / 2, -Math.PI / 2 + progressAngle);
+      ctx.stroke();
+    }
   }
 }

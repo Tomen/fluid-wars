@@ -2,24 +2,24 @@
 
 import type { Particle } from './particle';
 import type { Obstacle } from './obstacle';
+import type { Player } from './player';
 
 const BACKGROUND_COLOR = '#0a0a0f';
 
 export class Renderer {
-  private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   readonly width: number;
   readonly height: number;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
+    this.width = canvas.width;
+    this.height = canvas.height;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) {
       throw new Error('Could not get 2D context');
     }
     this.ctx = ctx;
-    this.width = canvas.width;
-    this.height = canvas.height;
   }
 
   clear(): void {
@@ -37,9 +37,17 @@ export class Renderer {
     }
   }
 
-  drawParticles(particles: Particle[]): void {
+  drawParticles(particles: Particle[], conversionProgressMap?: Map<Particle, number>, convertingColorMap?: Map<Particle, string>): void {
     for (const particle of particles) {
-      particle.draw(this.ctx);
+      const progress = conversionProgressMap?.get(particle);
+      const convertingColor = convertingColorMap?.get(particle);
+      particle.draw(this.ctx, progress, convertingColor);
+    }
+  }
+
+  drawPlayers(players: Player[]): void {
+    for (const player of players) {
+      player.draw(this.ctx);
     }
   }
 
