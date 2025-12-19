@@ -1,13 +1,93 @@
 // Centralized game configuration
+// Reads from config.yaml in the project root
+// Works in both browser (Vite) and Node.js (training)
+
+// Type definitions for the YAML config
+interface YamlConfig {
+  game: {
+    playerCount: number;
+    particlesPerPlayer: number;
+    canvasWidth: number;
+    canvasHeight: number;
+  };
+  particle: {
+    acceleration: number;
+    maxVelocity: number;
+    friction: number;
+    radius: number;
+    repulsionRadius: number;
+    repulsionStrength: number;
+    enemyRepulsionMultiplier: number;
+    spawnRadius: number;
+  };
+  conversion: {
+    radius: number;
+    rate: number;
+    threshold: number;
+    decayMultiplier: number;
+  };
+  player: {
+    cursorSpeed: number;
+    cursorRadius: number;
+  };
+  spatial: {
+    cellSize: number;
+  };
+  obstacle: {
+    size: number;
+    gridSpacing: number;
+    margin: number;
+    bounceEnergyLoss: number;
+  };
+  gameLoop: {
+    fixedDt: number;
+    maxAccumulator: number;
+  };
+  win: {
+    mode: 'elimination' | 'percentage';
+    eliminationThreshold: number;
+    percentageThreshold: number;
+  };
+  ai: {
+    enabled: boolean;
+    aiPlayers: number[];
+    defaultAIType: 'random' | 'aggressive' | 'neural';
+    neuralDifficulty: 'easy' | 'medium' | 'hard' | 'expert';
+  };
+  render: {
+    backgroundColor: string;
+  };
+}
+
+// Load config based on environment
+let config: YamlConfig;
+
+// Check if we're in a browser environment (Vite)
+const isBrowser = typeof window !== 'undefined';
+
+if (isBrowser) {
+  // Browser - use Vite plugin import (bundled at build time)
+  // @ts-ignore - Vite handles this import at build time
+  const rawConfig = await import('../config.yaml');
+  config = rawConfig.default as YamlConfig;
+} else {
+  // Node.js - read file directly using dynamic imports
+  const fs = await import('fs');
+  const path = await import('path');
+  const yaml = await import('js-yaml');
+  const configPath = path.resolve(process.cwd(), 'config.yaml');
+  const configFile = fs.readFileSync(configPath, 'utf8');
+  config = yaml.load(configFile) as YamlConfig;
+}
 
 /**
  * GAME SETUP
  */
 export const GAME_CONFIG = {
-  playerCount: 2,
-  particlesPerPlayer: 200,
-  canvasWidth: 1200,
-  canvasHeight: 800,
+  playerCount: config.game.playerCount,
+  particlesPerPlayer: config.game.particlesPerPlayer,
+  canvasWidth: config.game.canvasWidth,
+  canvasHeight: config.game.canvasHeight,
 } as const;
 
 /**
@@ -15,77 +95,87 @@ export const GAME_CONFIG = {
  */
 export const PARTICLE_CONFIG = {
   // Movement
-  acceleration: 200, // units/sec² - how fast particles accelerate toward cursor
-  maxVelocity: 150, // units/sec - maximum particle speed
-  friction: 0.98, // per frame - velocity decay (0.98 = 2% loss per frame)
+  acceleration: config.particle.acceleration,
+  maxVelocity: config.particle.maxVelocity,
+  friction: config.particle.friction,
 
   // Size
-  radius: 4, // pixels - visual size of particles
+  radius: config.particle.radius,
 
   // Collision and Repulsion
-  repulsionRadius: 16, // pixels - distance at which particles repel each other
-  repulsionStrength: 180, // force units - base repulsion force
-  enemyRepulsionMultiplier: 3.0, // multiplier - extra repulsion between enemy particles
+  repulsionRadius: config.particle.repulsionRadius,
+  repulsionStrength: config.particle.repulsionStrength,
+  enemyRepulsionMultiplier: config.particle.enemyRepulsionMultiplier,
 
   // Spawn
-  spawnRadius: 150, // pixels - radius around player cursor where particles spawn
+  spawnRadius: config.particle.spawnRadius,
 } as const;
 
 /**
  * CONVERSION SYSTEM
  */
 export const CONVERSION_CONFIG = {
-  radius: 20, // pixels - distance at which conversion can occur
-  rate: 1.0, // progress/sec - how fast conversion builds up when outnumbered
-  threshold: 1.0, // progress required to convert (1.0 = ~3.3 seconds at 0.3 rate)
-  decayMultiplier: 2, // decay rate multiplier when not being converted
+  radius: config.conversion.radius,
+  rate: config.conversion.rate,
+  threshold: config.conversion.threshold,
+  decayMultiplier: config.conversion.decayMultiplier,
 } as const;
 
 /**
  * PLAYER CONTROLS
  */
 export const PLAYER_CONFIG = {
-  cursorSpeed: 300, // units/sec - how fast cursors move with keyboard
-  cursorRadius: 8, // pixels - visual size of cursor
+  cursorSpeed: config.player.cursorSpeed,
+  cursorRadius: config.player.cursorRadius,
 } as const;
 
 /**
  * SPATIAL HASH (Performance)
  */
 export const SPATIAL_CONFIG = {
-  cellSize: 50, // pixels - size of spatial hash grid cells (should be >= max interaction distance)
+  cellSize: config.spatial.cellSize,
 } as const;
 
 /**
  * OBSTACLES / MAZE
  */
 export const OBSTACLE_CONFIG = {
-  size: 40, // pixels - width/height of obstacle squares
-  gridSpacing: 100, // pixels - distance between obstacle centers
-  margin: 100, // pixels - margin from canvas edges
-  bounceEnergyLoss: 0.5, // multiplier - energy retained after bouncing off obstacles
+  size: config.obstacle.size,
+  gridSpacing: config.obstacle.gridSpacing,
+  margin: config.obstacle.margin,
+  bounceEnergyLoss: config.obstacle.bounceEnergyLoss,
 } as const;
 
 /**
  * GAME LOOP
  */
 export const GAME_LOOP_CONFIG = {
-  fixedDt: 1 / 60, // seconds - physics timestep (60 FPS)
-  maxAccumulator: 0.1, // seconds - prevent spiral of death
+  fixedDt: config.gameLoop.fixedDt,
+  maxAccumulator: config.gameLoop.maxAccumulator,
 } as const;
 
 /**
  * WIN CONDITION
  */
 export const WIN_CONFIG = {
-  mode: 'percentage' as 'elimination' | 'percentage', // 'elimination' = opponent loses all particles, 'percentage' = control X% of all particles
-  eliminationThreshold: 0, // particles - opponent must have this many or fewer to lose (0 = complete elimination)
-  percentageThreshold: 0.8, // ratio - control this percentage of all particles to win (only for 'percentage' mode)
+  mode: config.win.mode,
+  eliminationThreshold: config.win.eliminationThreshold,
+  percentageThreshold: config.win.percentageThreshold,
+} as const;
+
+/**
+ * AI CONFIGURATION
+ */
+export const AI_CONFIG = {
+  enabled: config.ai.enabled,
+  aiPlayers: config.ai.aiPlayers,
+  defaultAIType: config.ai.defaultAIType,
+  neuralDifficulty: config.ai.neuralDifficulty,
 } as const;
 
 /**
  * RENDERING
  */
 export const RENDER_CONFIG = {
-  backgroundColor: '#0a0a0f',
+  backgroundColor: config.render.backgroundColor,
 } as const;

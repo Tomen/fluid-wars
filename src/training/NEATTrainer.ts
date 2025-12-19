@@ -104,6 +104,7 @@ export class NEATTrainer {
   private generation: number = 0;
   private isTraining: boolean = false;
   private shouldStop: boolean = false;
+  private resumedFromCheckpoint: boolean = false;
 
   // Callbacks
   private fitnessFunction: FitnessFunction | null = null;
@@ -190,37 +191,43 @@ export class NEATTrainer {
     while (this.generation < this.config.maxGenerations && !this.shouldStop) {
       const genStartTime = Date.now();
 
-      // Evaluate all genomes
-      await this.evaluatePopulation();
+      // Skip evaluation if we just resumed from a checkpoint (already evaluated)
+      if (this.resumedFromCheckpoint) {
+        this.resumedFromCheckpoint = false;
+        this.log(`Skipping evaluation for gen ${this.generation} (resumed from checkpoint)`);
+      } else {
+        // Evaluate all genomes
+        await this.evaluatePopulation();
 
-      // Sort by fitness (descending)
-      this.neat.sort();
+        // Sort by fitness (descending)
+        this.neat.sort();
 
-      // Get statistics
-      const stats = this.getGenerationStats(genStartTime);
+        // Get statistics
+        const stats = this.getGenerationStats(genStartTime);
 
-      // Call generation callback
-      if (this.onGeneration) {
-        this.onGeneration(stats, this.neat.population[0]);
-      }
+        // Call generation callback
+        if (this.onGeneration) {
+          this.onGeneration(stats, this.neat.population[0]);
+        }
 
-      // Log progress
-      if (this.config.verbose) {
-        this.log(
-          `Gen ${stats.generation}: Best=${stats.bestFitness.toFixed(2)}, ` +
-          `Avg=${stats.averageFitness.toFixed(2)}, Time=${stats.elapsedTime}ms`
-        );
-      }
+        // Log progress
+        if (this.config.verbose) {
+          this.log(
+            `Gen ${stats.generation}: Best=${stats.bestFitness.toFixed(2)}, ` +
+            `Avg=${stats.averageFitness.toFixed(2)}, Time=${stats.elapsedTime}ms`
+          );
+        }
 
-      // Check for target fitness
-      if (this.config.targetFitness !== undefined && stats.bestFitness >= this.config.targetFitness) {
-        this.log(`Target fitness ${this.config.targetFitness} reached!`);
-        break;
-      }
+        // Check for target fitness
+        if (this.config.targetFitness !== undefined && stats.bestFitness >= this.config.targetFitness) {
+          this.log(`Target fitness ${this.config.targetFitness} reached!`);
+          break;
+        }
 
-      // Save checkpoint
-      if (this.generation % this.config.checkpointInterval === 0) {
-        this.saveCheckpoint();
+        // Save checkpoint
+        if (this.generation % this.config.checkpointInterval === 0) {
+          this.saveCheckpoint();
+        }
       }
 
       // Evolve to next generation
@@ -304,18 +311,30 @@ export class NEATTrainer {
   }
 
   /**
-   * Load from a checkpoint
+   * Load from a checkpoint and prepare for next generation
    */
   loadCheckpoint(checkpoint: Checkpoint): void {
-    this.config = checkpoint.config;
-    this.generation = checkpoint.generation;
+    // Keep current config (from YAML) - don't overwrite with checkpoint's old config
 
-    // Reconstruct population
+    // Reconstruct population from checkpoint
     const population = checkpoint.population.map(json => Network.fromJSON(json));
 
-    this.neat = new Neat(this.config.inputSize, this.config.outputSize, null, {
+    // Restore scores from checkpoint so evolution can use them
+    const scores = population.map((_, i) => {
+      const savedGenome = checkpoint.population[i];
+      return (savedGenome as unknown as { score?: number }).score || 0;
+    });
+    population.forEach((genome, i) => {
+      genome.score = scores[i];
+    });
+
+    // Provide a pass-through fitness function that returns existing scores
+    // This is needed because neataptic's evolve() always calls fitness
+    const passThroughFitness = (genome: NetworkType) => genome.score || 0;
+
+    this.neat = new Neat(this.config.inputSize, this.config.outputSize, passThroughFitness, {
       population: population,
-      popsize: this.config.populationSize,
+      popsize: population.length,
       elitism: this.config.elitism,
       mutationRate: this.config.mutationRate,
       mutationAmount: this.config.mutationAmount,
@@ -328,7 +347,12 @@ export class NEATTrainer {
       mutation: methods.mutation.FFW,
     } as NeatOptions);
 
-    this.log(`Loaded checkpoint from generation ${this.generation}`);
+    // Resume from checkpoint generation
+    // Set flag to skip re-evaluation on first iteration (already evaluated)
+    this.generation = checkpoint.generation;
+    this.resumedFromCheckpoint = true;
+
+    this.log(`Loaded checkpoint from generation ${checkpoint.generation}`);
   }
 
   /**

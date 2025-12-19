@@ -98,6 +98,7 @@ export class CenterOfMassAI implements AIController {
   getAction(game: Game): AIAction {
     const particles = game.getParticles();
     const players = game.getPlayers();
+    const { width: canvasWidth, height: canvasHeight } = game.getCanvasSize();
 
     // Find center of mass of own particles
     let sumX = 0;
@@ -116,8 +117,8 @@ export class CenterOfMassAI implements AIController {
       // No particles left, stay at current position
       const player = players[this.playerId];
       return {
-        targetX: player.cursorX / 1200, // Assuming default canvas width
-        targetY: player.cursorY / 800,  // Assuming default canvas height
+        targetX: player.cursorX / canvasWidth,
+        targetY: player.cursorY / canvasHeight,
       };
     }
 
@@ -126,8 +127,8 @@ export class CenterOfMassAI implements AIController {
 
     // Normalize to 0-1 range
     return {
-      targetX: centerX / 1200,
-      targetY: centerY / 800,
+      targetX: centerX / canvasWidth,
+      targetY: centerY / canvasHeight,
     };
   }
 
@@ -154,15 +155,15 @@ export class AggressiveAI implements AIController {
   getAction(game: Game): AIAction {
     const particles = game.getParticles();
     const players = game.getPlayers();
-    const enemyId = 1 - this.playerId;
+    const { width: canvasWidth, height: canvasHeight } = game.getCanvasSize();
 
-    // Find center of mass of enemy particles
+    // Find center of mass of ALL enemy particles (any player that isn't us)
     let sumX = 0;
     let sumY = 0;
     let count = 0;
 
     for (const particle of particles) {
-      if (particle.owner === enemyId) {
+      if (particle.owner !== this.playerId) {
         sumX += particle.x;
         sumY += particle.y;
         count++;
@@ -173,8 +174,8 @@ export class AggressiveAI implements AIController {
       // No enemy particles, stay at current position
       const player = players[this.playerId];
       return {
-        targetX: player.cursorX / 1200,
-        targetY: player.cursorY / 800,
+        targetX: player.cursorX / canvasWidth,
+        targetY: player.cursorY / canvasHeight,
       };
     }
 
@@ -183,8 +184,8 @@ export class AggressiveAI implements AIController {
 
     // Normalize to 0-1 range
     return {
-      targetX: centerX / 1200,
-      targetY: centerY / 800,
+      targetX: centerX / canvasWidth,
+      targetY: centerY / canvasHeight,
     };
   }
 

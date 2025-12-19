@@ -1,9 +1,48 @@
 // Training configuration
+// Reads from config.yaml in the project root
 
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
 import type { TrainerConfig } from '../src/training/NEATTrainer';
 import type { EvaluatorConfig } from '../src/training/FitnessEvaluator';
 import type { SimulatorConfig } from '../src/core/AIInterface';
 import type { EncoderConfig } from '../src/ai/ObservationEncoder';
+
+// Load YAML config
+const configPath = path.resolve(process.cwd(), 'config.yaml');
+const configFile = fs.readFileSync(configPath, 'utf8');
+const rawConfig = yaml.load(configFile) as Record<string, unknown>;
+
+// Extract training section
+const trainingConfig = rawConfig.training as {
+  trainer: {
+    populationSize: number;
+    elitism: number;
+    mutationRate: number;
+    mutationAmount: number;
+    maxGenerations: number;
+    checkpointInterval: number;
+    verbose: boolean;
+  };
+  evaluator: {
+    matchesPerGenome: number;
+    maxGameSteps: number;
+    stepsPerSecond: number;
+  };
+  simulator: {
+    playerCount: number;
+    particlesPerPlayer: number;
+    canvasWidth: number;
+    canvasHeight: number;
+  };
+  difficultyTiers: {
+    easy: number;
+    medium: number;
+    hard: number;
+    expert: number;
+  };
+};
 
 /**
  * Encoder configuration
@@ -13,8 +52,8 @@ export const ENCODER_CONFIG: Partial<EncoderConfig> = {
   gridCols: 20,
   channels: 5,
   maxDensity: 20,
-  canvasWidth: 1200,
-  canvasHeight: 800,
+  canvasWidth: trainingConfig.simulator.canvasWidth,
+  canvasHeight: trainingConfig.simulator.canvasHeight,
 };
 
 /**
@@ -34,12 +73,12 @@ export function getInputSize(): number {
  * Uses smaller particle counts for faster simulation
  */
 export const SIMULATOR_CONFIG: Partial<SimulatorConfig> = {
-  playerCount: 2,
-  particlesPerPlayer: 100,  // Reduced for faster training
-  canvasWidth: 1200,
-  canvasHeight: 800,
+  playerCount: trainingConfig.simulator.playerCount,
+  particlesPerPlayer: trainingConfig.simulator.particlesPerPlayer,
+  canvasWidth: trainingConfig.simulator.canvasWidth,
+  canvasHeight: trainingConfig.simulator.canvasHeight,
   fixedDt: 1 / 60,
-  maxSteps: 1800,  // 30 seconds at 60 FPS
+  maxSteps: trainingConfig.evaluator.maxGameSteps,
   gridRows: 16,
   gridCols: 20,
 };
@@ -48,28 +87,28 @@ export const SIMULATOR_CONFIG: Partial<SimulatorConfig> = {
  * NEAT trainer configuration
  */
 export const TRAINER_CONFIG: Partial<TrainerConfig> = {
-  populationSize: 50,           // Start small for testing
-  inputSize: getInputSize(),    // 1606 inputs
-  outputSize: 2,                // targetX, targetY
-  elitism: 5,                   // Keep top 5 unchanged
-  mutationRate: 0.3,
-  mutationAmount: 1,
-  maxGenerations: 500,
-  checkpointInterval: 25,
-  verbose: true,
+  populationSize: trainingConfig.trainer.populationSize,
+  inputSize: getInputSize(),
+  outputSize: 2,  // targetX, targetY
+  elitism: trainingConfig.trainer.elitism,
+  mutationRate: trainingConfig.trainer.mutationRate,
+  mutationAmount: trainingConfig.trainer.mutationAmount,
+  maxGenerations: trainingConfig.trainer.maxGenerations,
+  checkpointInterval: trainingConfig.trainer.checkpointInterval,
+  verbose: trainingConfig.trainer.verbose,
 };
 
 /**
  * Fitness evaluator configuration
+ *
+ * Reward function:
+ * - Base score = particle advantage (my particles - enemy particles)
+ * - If win before timeout, add remaining seconds as bonus
  */
 export const EVALUATOR_CONFIG: Partial<EvaluatorConfig> = {
-  matchesPerEvaluation: 3,      // Play 3 matches per opponent sample
-  maxStepsPerMatch: 1800,       // 30 seconds per match
-  winReward: 100,
-  loseReward: -50,
-  drawReward: 10,               // Small reward for surviving
-  particleAdvantageBonus: 0.5,
-  quickWinBonus: 20,
+  matchesPerEvaluation: trainingConfig.evaluator.matchesPerGenome,
+  maxStepsPerMatch: trainingConfig.evaluator.maxGameSteps,
+  stepsPerSecond: trainingConfig.evaluator.stepsPerSecond,
   simulatorConfig: SIMULATOR_CONFIG,
   encoderConfig: ENCODER_CONFIG,
 };
@@ -79,16 +118,16 @@ export const EVALUATOR_CONFIG: Partial<EvaluatorConfig> = {
  * Save models at these generations for different difficulty levels
  */
 export const DIFFICULTY_TIERS = {
-  easy: { generation: 25, filename: 'ai_easy.json' },
-  medium: { generation: 100, filename: 'ai_medium.json' },
-  hard: { generation: 250, filename: 'ai_hard.json' },
-  expert: { generation: 500, filename: 'ai_expert.json' },
+  easy: { generation: trainingConfig.difficultyTiers.easy, filename: 'ai_easy.json' },
+  medium: { generation: trainingConfig.difficultyTiers.medium, filename: 'ai_medium.json' },
+  hard: { generation: trainingConfig.difficultyTiers.hard, filename: 'ai_hard.json' },
+  expert: { generation: trainingConfig.difficultyTiers.expert, filename: 'ai_expert.json' },
 } as const;
 
 /**
- * Output directory for saved models
+ * Output directory for saved models (public folder for browser access)
  */
-export const MODEL_OUTPUT_DIR = './training/models';
+export const MODEL_OUTPUT_DIR = './public/models';
 
 /**
  * Checkpoint directory

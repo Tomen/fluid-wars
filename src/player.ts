@@ -9,7 +9,7 @@ export class Player {
   readonly color: string;
   cursorX: number;
   cursorY: number;
-  readonly isAI: boolean;
+  isAI: boolean;
   particleCount: number = 0;
 
   constructor(id: number, color: string, isAI: boolean, startX: number, startY: number) {

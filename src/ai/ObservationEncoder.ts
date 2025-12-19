@@ -84,9 +84,14 @@ export class ObservationEncoder {
     const flatGrid = this.flattenGrid(grid);
 
     // Encode cursor positions (from this player's perspective)
-    // Self cursor first, then enemy cursor
+    // Self cursor first, then primary enemy cursor
     const selfPlayer = players[playerId];
-    const enemyPlayer = players[1 - playerId];
+
+    // Find primary enemy (first player that isn't us, or player with most particles)
+    let enemyPlayer = players.find((_p, i) => i !== playerId);
+    if (!enemyPlayer) {
+      enemyPlayer = selfPlayer; // Fallback (shouldn't happen)
+    }
 
     const cursorData = [
       selfPlayer.cursorX / this.config.canvasWidth,
@@ -96,9 +101,14 @@ export class ObservationEncoder {
     ];
 
     // Encode particle counts (normalized by total)
+    // For multi-player: self count vs all enemies combined
+    const enemyParticleCount = players
+      .filter((_, i) => i !== playerId)
+      .reduce((sum, p) => sum + p.particleCount, 0);
+
     const countData = [
       totalParticles > 0 ? selfPlayer.particleCount / totalParticles : 0.5,
-      totalParticles > 0 ? enemyPlayer.particleCount / totalParticles : 0.5,
+      totalParticles > 0 ? enemyParticleCount / totalParticles : 0.5,
     ];
 
     // Combine all features

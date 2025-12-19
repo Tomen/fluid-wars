@@ -30,11 +30,28 @@ function saveCheckpoint(checkpoint: Checkpoint): void {
   fs.writeFileSync(filename, JSON.stringify(checkpoint, null, 2));
   console.log(`Saved checkpoint: ${filename}`);
 
-  // Check if this generation matches a difficulty tier
+  // Always save the latest model to ai_easy.json with generation metadata
+  const latestModelPath = path.join(MODEL_OUTPUT_DIR, 'ai_easy.json');
+  const modelWithMetadata = {
+    generation: checkpoint.generation,
+    bestFitness: checkpoint.bestFitness,
+    averageFitness: checkpoint.averageFitness,
+    network: checkpoint.bestGenome,
+  };
+  fs.writeFileSync(latestModelPath, JSON.stringify(modelWithMetadata, null, 2));
+  console.log(`Updated latest model: ${latestModelPath} (gen ${checkpoint.generation})`);
+
+  // Check if this generation matches a difficulty tier (for other tiers)
   for (const [tier, config] of Object.entries(DIFFICULTY_TIERS)) {
-    if (checkpoint.generation === config.generation) {
+    if (tier !== 'easy' && checkpoint.generation === config.generation) {
       const modelPath = path.join(MODEL_OUTPUT_DIR, config.filename);
-      fs.writeFileSync(modelPath, JSON.stringify(checkpoint.bestGenome, null, 2));
+      const tierModel = {
+        generation: checkpoint.generation,
+        bestFitness: checkpoint.bestFitness,
+        averageFitness: checkpoint.averageFitness,
+        network: checkpoint.bestGenome,
+      };
+      fs.writeFileSync(modelPath, JSON.stringify(tierModel, null, 2));
       console.log(`Saved ${tier} difficulty model: ${modelPath}`);
     }
   }
@@ -81,7 +98,7 @@ async function main(): Promise<void> {
   // Check for existing checkpoint
   const checkpoint = loadLatestCheckpoint();
   if (checkpoint) {
-    console.log(`Resuming from generation ${checkpoint.generation}`);
+    console.log(`Found checkpoint at generation ${checkpoint.generation}`);
     trainer.loadCheckpoint(checkpoint);
   } else {
     console.log('Starting fresh training');

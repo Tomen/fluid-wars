@@ -1,0 +1,127 @@
+# Fluid Wars Configuration
+# All game settings in one place
+
+# =============================================================================
+# GAME SETUP
+# =============================================================================
+game:
+  playerCount: 4
+  particlesPerPlayer: 200
+  canvasWidth: 1200
+  canvasHeight: 800
+
+# =============================================================================
+# PARTICLE PHYSICS
+# =============================================================================
+particle:
+  # Movement
+  acceleration: 200      # units/sec² - how fast particles accelerate toward cursor
+  maxVelocity: 150       # units/sec - maximum particle speed
+  friction: 0.98         # per frame - velocity decay (0.98 = 2% loss per frame)
+
+  # Size
+  radius: 4              # pixels - visual size of particles
+
+  # Collision and Repulsion
+  repulsionRadius: 16    # pixels - distance at which particles repel each other
+  repulsionStrength: 180 # force units - base repulsion force
+  enemyRepulsionMultiplier: 3.0  # multiplier - extra repulsion between enemy particles
+
+  # Spawn
+  spawnRadius: 150       # pixels - radius around player cursor where particles spawn
+
+# =============================================================================
+# CONVERSION SYSTEM
+# =============================================================================
+conversion:
+  radius: 20             # pixels - distance at which conversion can occur
+  rate: 1.0              # progress/sec - how fast conversion builds up when outnumbered
+  threshold: 1.0         # progress required to convert
+  decayMultiplier: 2     # decay rate multiplier when not being converted
+
+# =============================================================================
+# PLAYER CONTROLS
+# =============================================================================
+player:
+  cursorSpeed: 300       # units/sec - how fast cursors move with keyboard
+  cursorRadius: 8        # pixels - visual size of cursor
+
+# =============================================================================
+# SPATIAL HASH (Performance)
+# =============================================================================
+spatial:
+  cellSize: 50           # pixels - size of spatial hash grid cells
+
+# =============================================================================
+# OBSTACLES / MAZE
+# =============================================================================
+obstacle:
+  size: 40               # pixels - width/height of obstacle squares
+  gridSpacing: 100       # pixels - distance between obstacle centers
+  margin: 100            # pixels - margin from canvas edges
+  bounceEnergyLoss: 0.5  # multiplier - energy retained after bouncing
+
+# =============================================================================
+# GAME LOOP
+# =============================================================================
+gameLoop:
+  fixedDt: 0.01666667    # seconds - physics timestep (1/60 = 60 FPS)
+  maxAccumulator: 0.1    # seconds - prevent spiral of death
+
+# =============================================================================
+# WIN CONDITION
+# =============================================================================
+win:
+  mode: percentage       # 'elimination' or 'percentage'
+  eliminationThreshold: 0   # particles - opponent must have this many or fewer to lose
+  percentageThreshold: 0.8  # ratio - control this percentage to win (percentage mode)
+
+# =============================================================================
+# AI CONFIGURATION
+# =============================================================================
+ai:
+  enabled: true          # whether to use AI opponents
+  # Which players are AI controlled (0-indexed)
+  # Example: [1, 2, 3] means players 2, 3, 4 are AI
+  aiPlayers: [1, 2, 3]
+  # Default AI type: 'random', 'aggressive', or 'neural'
+  defaultAIType: neural
+  # Difficulty for neural AI: 'easy', 'medium', 'hard', 'expert'
+  neuralDifficulty: easy
+
+# =============================================================================
+# RENDERING
+# =============================================================================
+render:
+  backgroundColor: '#0a0a0f'
+
+# =============================================================================
+# TRAINING (used by npm run train)
+# =============================================================================
+training:
+  trainer:
+    populationSize: 10
+    elitism: 5
+    mutationRate: 0.3
+    mutationAmount: 1
+    maxGenerations: 500
+    checkpointInterval: 1    # Save every generation
+    verbose: true
+
+  evaluator:
+    matchesPerGenome: 1      # Matches per genome evaluation
+    maxGameSteps: 3600       # Steps per match (~17 seconds at 60 FPS)
+    stepsPerSecond: 60       # For calculating time bonus
+
+  simulator:
+    playerCount: 4
+    particlesPerPlayer: 250
+    canvasWidth: 800
+    canvasHeight: 600
+
+  # Generations at which to save difficulty-tiered models
+  difficultyTiers:
+    easy: 25
+    medium: 100
+    hard: 250
+    expert: 500

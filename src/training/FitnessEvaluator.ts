@@ -1,4 +1,4 @@
-// FitnessEvaluator - Evaluate genome fitness through matches
+// FitnessEvaluator - Evaluate genome fitness through multi-player matches
 
 import type { Network as NetworkType } from 'neataptic';
 import { GameSimulator } from '../core/GameSimulator';
@@ -16,20 +16,8 @@ export interface EvaluatorConfig {
   /** Maximum steps per match */
   maxStepsPerMatch: number;
 
-  /** Reward for winning a match */
-  winReward: number;
-
-  /** Penalty for losing a match */
-  loseReward: number;
-
-  /** Reward for a draw (timeout) */
-  drawReward: number;
-
-  /** Bonus per particle advantage at end of match */
-  particleAdvantageBonus: number;
-
-  /** Bonus for quick wins (scales with remaining time) */
-  quickWinBonus: number;
+  /** Steps per second (for calculating time bonus) */
+  stepsPerSecond: number;
 
   /** Simulator configuration */
   simulatorConfig: Partial<SimulatorConfig>;
@@ -44,13 +32,10 @@ export interface EvaluatorConfig {
 export const DEFAULT_EVALUATOR_CONFIG: EvaluatorConfig = {
   matchesPerEvaluation: 3,
   maxStepsPerMatch: 1800, // 30 seconds at 60 FPS
-  winReward: 100,
-  loseReward: -50,
-  drawReward: 0,
-  particleAdvantageBonus: 0.5,
-  quickWinBonus: 20,
+  stepsPerSecond: 60,
   simulatorConfig: {
-    particlesPerPlayer: 100, // Smaller for faster training
+    playerCount: 3,
+    particlesPerPlayer: 100,
     maxSteps: 1800,
   },
   encoderConfig: {},
@@ -60,47 +45,52 @@ export const DEFAULT_EVALUATOR_CONFIG: EvaluatorConfig = {
  * Result of a single match
  */
 export interface MatchResult {
-  winner: number; // -1 for draw, 0 or 1 for player
+  winner: number; // -1 for draw/timeout, or player ID
   steps: number;
   finalParticleCounts: number[];
-  player0Score: number;
-  player1Score: number;
+  scores: number[]; // Score for each player
 }
 
 /**
  * Fitness evaluator for NEAT genomes
- * Runs matches between genomes and computes fitness scores
+ * Runs multi-player matches between genomes and computes fitness scores
  */
 export class FitnessEvaluator {
   private config: EvaluatorConfig;
+  private playerCount: number;
 
   constructor(config: Partial<EvaluatorConfig> = {}) {
     this.config = { ...DEFAULT_EVALUATOR_CONFIG, ...config };
+    this.playerCount = this.config.simulatorConfig.playerCount || 3;
   }
 
   /**
-   * Evaluate a genome's fitness by playing matches against opponents
+   * Evaluate a genome's fitness by playing matches
+   * The genome plays as player 0 against randomly selected opponents
    *
    * @param genome The genome to evaluate
-   * @param opponents Array of opponent genomes to play against
+   * @param population Full population to sample opponents from
    * @returns Fitness score
    */
-  async evaluateGenome(genome: NetworkType, opponents: NetworkType[]): Promise<number> {
+  async evaluateGenome(genome: NetworkType, population: NetworkType[]): Promise<number> {
     let totalScore = 0;
     let matchCount = 0;
 
-    // Play against a sample of opponents
-    const opponentSample = this.sampleOpponents(opponents, this.config.matchesPerEvaluation);
+    // Get opponents (everyone except self)
+    const availableOpponents = population.filter(g => g !== genome);
 
-    for (const opponent of opponentSample) {
-      // Play as player 0
-      const result0 = await this.playMatch(genome, opponent);
-      totalScore += result0.player0Score;
-      matchCount++;
+    for (let i = 0; i < this.config.matchesPerEvaluation; i++) {
+      // Sample N-1 opponents for this match
+      const opponents = this.sampleOpponents(availableOpponents, this.playerCount - 1);
 
-      // Play as player 1 (swap positions for fairness)
-      const result1 = await this.playMatch(opponent, genome);
-      totalScore += result1.player1Score;
+      // Build player list: genome being evaluated is always player 0
+      const players = [genome, ...opponents];
+
+      // Play the match
+      const result = await this.playMatch(players);
+
+      // Get score for player 0 (the genome being evaluated)
+      totalScore += result.scores[0];
       matchCount++;
     }
 
@@ -109,19 +99,22 @@ export class FitnessEvaluator {
   }
 
   /**
-   * Play a single match between two genomes
+   * Play a single match between multiple genomes
    *
-   * @param genome0 Player 0's genome
-   * @param genome1 Player 1's genome
-   * @returns Match result
+   * @param genomes Array of genomes, one per player
+   * @returns Match result with scores for all players
    */
-  async playMatch(genome0: NetworkType, genome1: NetworkType): Promise<MatchResult> {
+  async playMatch(genomes: NetworkType[]): Promise<MatchResult> {
     // Create simulator
-    const simulator = new GameSimulator(this.config.simulatorConfig);
+    const simulator = new GameSimulator({
+      ...this.config.simulatorConfig,
+      playerCount: genomes.length,
+    });
 
-    // Create AI controllers
-    const ai0 = new NeuralAI(0, genome0, this.config.encoderConfig);
-    const ai1 = new NeuralAI(1, genome1, this.config.encoderConfig);
+    // Create AI controllers for each player
+    const ais = genomes.map((genome, i) =>
+      new NeuralAI(i, genome, this.config.encoderConfig)
+    );
 
     // Reset simulator
     simulator.reset();
@@ -131,14 +124,11 @@ export class FitnessEvaluator {
     while (!simulator.isTerminal() && steps < this.config.maxStepsPerMatch) {
       const game = simulator.getGame();
 
-      // Get actions from both AIs
-      const action0 = ai0.getAction(game);
-      const action1 = ai1.getAction(game);
-
-      // Create action map
+      // Get actions from all AIs
       const actions = new Map<number, AIAction>();
-      actions.set(0, action0);
-      actions.set(1, action1);
+      for (let i = 0; i < ais.length; i++) {
+        actions.set(i, ais[i].getAction(game));
+      }
 
       // Step the simulation
       simulator.step(actions);
@@ -151,11 +141,11 @@ export class FitnessEvaluator {
     const winner = simulator.getWinner();
 
     const finalParticleCounts = players.map(p => p.particleCount);
-    const totalParticles = finalParticleCounts.reduce((a, b) => a + b, 0);
 
-    // Calculate scores
-    const player0Score = this.calculateScore(0, winner, steps, finalParticleCounts, totalParticles);
-    const player1Score = this.calculateScore(1, winner, steps, finalParticleCounts, totalParticles);
+    // Calculate scores for all players
+    const scores = players.map((_, i) =>
+      this.calculateScore(i, winner, steps, finalParticleCounts)
+    );
 
     // Cleanup
     simulator.destroy();
@@ -164,51 +154,48 @@ export class FitnessEvaluator {
       winner,
       steps,
       finalParticleCounts,
-      player0Score,
-      player1Score,
+      scores,
     };
   }
 
   /**
    * Calculate the score for a player based on match outcome
+   *
+   * Reward function:
+   * - Timeout: score = particle count
+   * - Early win: winner gets particles + remaining seconds
+   * - Early win: losers get particles - remaining seconds
    */
   private calculateScore(
     playerId: number,
     winner: number,
     steps: number,
-    particleCounts: number[],
-    totalParticles: number
+    particleCounts: number[]
   ): number {
-    let score = 0;
+    const myParticles = particleCounts[playerId];
 
-    // Win/lose/draw reward
-    if (winner === playerId) {
-      score += this.config.winReward;
+    // Base score: particle count
+    let score = myParticles;
 
-      // Quick win bonus (more bonus for faster wins)
-      const timeRatio = 1 - (steps / this.config.maxStepsPerMatch);
-      score += this.config.quickWinBonus * timeRatio;
-    } else if (winner === -1) {
-      // Draw
-      score += this.config.drawReward;
-    } else {
-      // Loss
-      score += this.config.loseReward;
-    }
+    // If game ended early (someone won before timeout)
+    if (winner !== -1 && steps < this.config.maxStepsPerMatch) {
+      const remainingSteps = this.config.maxStepsPerMatch - steps;
+      const remainingSeconds = remainingSteps / this.config.stepsPerSecond;
 
-    // Particle advantage bonus
-    if (totalParticles > 0) {
-      const myParticles = particleCounts[playerId];
-      const enemyParticles = particleCounts[1 - playerId];
-      const advantage = (myParticles - enemyParticles) / totalParticles;
-      score += advantage * this.config.particleAdvantageBonus * 100;
+      if (winner === playerId) {
+        // Winner bonus: add remaining seconds
+        score += remainingSeconds;
+      } else {
+        // Loser malus: subtract remaining seconds
+        score -= remainingSeconds;
+      }
     }
 
     return score;
   }
 
   /**
-   * Sample opponents from the population
+   * Sample opponents from available genomes
    */
   private sampleOpponents(opponents: NetworkType[], count: number): NetworkType[] {
     if (opponents.length <= count) {
@@ -218,23 +205,6 @@ export class FitnessEvaluator {
     // Random sampling without replacement
     const shuffled = [...opponents].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
-  }
-
-  /**
-   * Run a tournament between multiple genomes
-   * Returns fitness scores for all participants
-   */
-  async runTournament(genomes: NetworkType[]): Promise<Map<NetworkType, number>> {
-    const scores = new Map<NetworkType, number>();
-
-    for (const genome of genomes) {
-      // Evaluate against all other genomes
-      const opponents = genomes.filter(g => g !== genome);
-      const fitness = await this.evaluateGenome(genome, opponents);
-      scores.set(genome, fitness);
-    }
-
-    return scores;
   }
 
   /**
@@ -255,8 +225,6 @@ export function createFitnessFunction(
   const evaluator = new FitnessEvaluator(config);
 
   return async (genome: NetworkType, population: NetworkType[]): Promise<number> => {
-    // Filter out self from opponents
-    const opponents = population.filter(g => g !== genome);
-    return evaluator.evaluateGenome(genome, opponents);
+    return evaluator.evaluateGenome(genome, population);
   };
 }

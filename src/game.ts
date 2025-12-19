@@ -8,7 +8,9 @@ import { InputManager } from './input';
 import { SpatialHash } from './collision';
 import { ConversionSystem } from './conversion';
 import { PLAYER_COLORS } from './types';
-import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
+import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG, PLAYER_CONFIG } from './config';
+import type { AIController } from './ai/AIController';
+import { clamp } from './utils';
 
 export class Game {
   private players: Player[] = [];
@@ -27,6 +29,9 @@ export class Game {
   // Game state
   private winner: number = -1; // -1 = no winner, 0+ = player ID
   private readonly headless: boolean;
+
+  // AI controllers (one per AI player)
+  private aiControllers: Map<number, AIController> = new Map();
 
   constructor(config: GameConfig, canvasWidth: number, canvasHeight: number, headless: boolean = false) {
     this.headless = headless;
@@ -56,13 +61,21 @@ export class Game {
   private initPlayers(config: GameConfig): void {
     const { playerCount } = config;
 
+    // Corner positions with margin from edges
+    const margin = 150;
+    const corners = [
+      { x: margin, y: margin },                                    // top-left
+      { x: this.canvasWidth - margin, y: margin },                 // top-right
+      { x: margin, y: this.canvasHeight - margin },                // bottom-left
+      { x: this.canvasWidth - margin, y: this.canvasHeight - margin }, // bottom-right
+    ];
+
     for (let i = 0; i < playerCount; i++) {
       const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
-      // Start players at different positions
-      const startX = (this.canvasWidth / (playerCount + 1)) * (i + 1);
-      const startY = this.canvasHeight / 2;
+      // Start players in corners (or spread evenly if more than 4)
+      const pos = corners[i % corners.length];
 
-      this.players.push(new Player(i, color, false, startX, startY));
+      this.players.push(new Player(i, color, false, pos.x, pos.y));
     }
   }
 
@@ -122,11 +135,31 @@ export class Game {
   }
 
   update(dt: number): void {
-    // Update players based on input
+    // Update players based on input (human) or AI controllers
     for (let i = 0; i < this.players.length; i++) {
       const player = this.players[i];
-      const input = this.input.getPlayerInput(i);
-      player.updateCursor(input, dt, this.canvasWidth, this.canvasHeight);
+
+      if (this.aiControllers.has(i)) {
+        // AI player - get action from controller
+        const ai = this.aiControllers.get(i)!;
+        const action = ai.getAction(this);
+
+        // Set cursor position directly from AI (normalized 0-1 -> canvas coords)
+        player.cursorX = clamp(
+          action.targetX * this.canvasWidth,
+          PLAYER_CONFIG.cursorRadius,
+          this.canvasWidth - PLAYER_CONFIG.cursorRadius
+        );
+        player.cursorY = clamp(
+          action.targetY * this.canvasHeight,
+          PLAYER_CONFIG.cursorRadius,
+          this.canvasHeight - PLAYER_CONFIG.cursorRadius
+        );
+      } else {
+        // Human player - use keyboard input
+        const input = this.input.getPlayerInput(i);
+        player.updateCursor(input, dt, this.canvasWidth, this.canvasHeight);
+      }
     }
 
     // Build spatial hash for efficient collision detection
@@ -266,5 +299,47 @@ export class Game {
 
   destroy(): void {
     this.input.destroy();
+  }
+
+  /**
+   * Set an AI controller for a player
+   * @param playerId The player ID to control
+   * @param controller The AI controller to use
+   */
+  setAIController(playerId: number, controller: AIController): void {
+    if (playerId < 0 || playerId >= this.players.length) {
+      throw new Error(`Invalid player ID: ${playerId}`);
+    }
+    this.aiControllers.set(playerId, controller);
+    this.players[playerId].isAI = true;
+
+    if (!this.headless) {
+      console.log(`AI controller set for player ${playerId + 1}: ${controller.getName()}`);
+    }
+  }
+
+  /**
+   * Remove an AI controller from a player
+   * @param playerId The player ID to remove AI from
+   */
+  removeAIController(playerId: number): void {
+    this.aiControllers.delete(playerId);
+    if (playerId >= 0 && playerId < this.players.length) {
+      this.players[playerId].isAI = false;
+    }
+  }
+
+  /**
+   * Check if a player has an AI controller
+   */
+  hasAIController(playerId: number): boolean {
+    return this.aiControllers.has(playerId);
+  }
+
+  /**
+   * Get the canvas dimensions
+   */
+  getCanvasSize(): { width: number; height: number } {
+    return { width: this.canvasWidth, height: this.canvasHeight };
   }
 }

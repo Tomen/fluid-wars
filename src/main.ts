@@ -3,7 +3,12 @@
 import type { AppState, GameConfig } from './types';
 import { Game } from './game';
 import { Renderer } from './renderer';
-import { GAME_CONFIG, GAME_LOOP_CONFIG } from './config';
+import { GAME_CONFIG, GAME_LOOP_CONFIG, AI_CONFIG } from './config';
+import { AggressiveAI, RandomAI } from './ai/AIController';
+import { NeuralAI } from './ai/NeuralAI';
+import { loadModelWithMetadata, isModelAvailable, clearModelCache } from './ai/ModelLoader';
+import type { AIController } from './ai/AIController';
+import type { ModelMetadata } from './ai/ModelLoader';
 
 class App {
   private state: AppState = 'playing'; // Start in playing state for now
@@ -17,6 +22,9 @@ class App {
 
   // Game state
   private game: Game | null = null;
+
+  // AI metadata (for displaying generation info)
+  private aiModelMetadata: ModelMetadata | null = null;
 
   constructor() {
     // Get canvas element
@@ -49,9 +57,60 @@ class App {
     console.log(`Canvas size: ${this.renderer.width}x${this.renderer.height}`);
   }
 
-  init(): void {
+  async init(): Promise<void> {
+    // Setup AI controllers if enabled
+    if (AI_CONFIG.enabled && this.game) {
+      await this.setupAIControllers();
+    }
+
     // Start the game loop
     requestAnimationFrame((time) => this.loop(time));
+  }
+
+  private async setupAIControllers(): Promise<void> {
+    if (!this.game) return;
+
+    // Clear previous AI metadata
+    this.aiModelMetadata = null;
+
+    for (const playerId of AI_CONFIG.aiPlayers) {
+      if (playerId < 0 || playerId >= GAME_CONFIG.playerCount) {
+        console.warn(`Invalid AI player ID: ${playerId}, skipping`);
+        continue;
+      }
+
+      let controller: AIController;
+
+      if (AI_CONFIG.defaultAIType === 'neural') {
+        // Try to load neural AI model
+        try {
+          const modelAvailable = await isModelAvailable(AI_CONFIG.neuralDifficulty);
+          if (modelAvailable) {
+            const { network, metadata } = await loadModelWithMetadata(AI_CONFIG.neuralDifficulty);
+            controller = new NeuralAI(playerId, network);
+            // Store metadata for UI display (only need to store once since all AI use same model)
+            this.aiModelMetadata = metadata;
+            const genInfo = metadata.generation !== null ? ` gen ${metadata.generation}` : '';
+            console.log(`Player ${playerId + 1}: Neural AI (${AI_CONFIG.neuralDifficulty}${genInfo})`);
+          } else {
+            // Fall back to aggressive AI
+            console.warn(`Neural model not available for ${AI_CONFIG.neuralDifficulty}, falling back to AggressiveAI`);
+            controller = new AggressiveAI(playerId);
+          }
+        } catch (error) {
+          console.error(`Failed to load neural AI:`, error);
+          controller = new AggressiveAI(playerId);
+        }
+      } else if (AI_CONFIG.defaultAIType === 'aggressive') {
+        controller = new AggressiveAI(playerId);
+        console.log(`Player ${playerId + 1}: Aggressive AI`);
+      } else {
+        controller = new RandomAI(playerId);
+        console.log(`Player ${playerId + 1}: Random AI`);
+      }
+
+      this.game.setAIController(playerId, controller);
+    }
   }
 
   setState(newState: AppState, _config?: GameConfig): void {
@@ -113,11 +172,23 @@ class App {
       // Show player info
       for (let i = 0; i < players.length; i++) {
         const player = players[i];
-        const keys = i === 0 ? 'WASD' : 'Arrows';
+        const controlType = player.isAI ? 'AI' : (i === 0 ? 'WASD' : 'Arrows');
         this.renderer.drawDebugText(
-          `P${i + 1} (${keys}): ${player.particleCount} particles | Cursor: (${Math.floor(player.cursorX)}, ${Math.floor(player.cursorY)})`,
+          `P${i + 1} (${controlType}): ${player.particleCount} particles | Cursor: (${Math.floor(player.cursorX)}, ${Math.floor(player.cursorY)})`,
           10,
           40 + i * 20
+        );
+      }
+
+      // Show AI model info on dedicated line
+      if (this.aiModelMetadata) {
+        const gen = this.aiModelMetadata.generation !== null ? this.aiModelMetadata.generation : '?';
+        const best = this.aiModelMetadata.bestFitness !== null ? this.aiModelMetadata.bestFitness.toFixed(1) : '?';
+        const avg = this.aiModelMetadata.averageFitness !== null ? this.aiModelMetadata.averageFitness.toFixed(1) : '?';
+        this.renderer.drawDebugText(
+          `AI Model: Gen ${gen} | Best: ${best} | Avg: ${avg}`,
+          10,
+          40 + players.length * 20
         );
       }
     }
@@ -147,8 +218,8 @@ class App {
     // Draw player info
     ctx.fillStyle = '#ffffff';
     ctx.font = '36px sans-serif';
-    const playerKeys = winner.id === 0 ? 'WASD' : 'Arrows';
-    ctx.fillText(`Player ${winner.id + 1} (${playerKeys}) Wins!`, centerX, centerY);
+    const playerType = winner.isAI ? 'AI' : (winner.id === 0 ? 'WASD' : 'Arrows');
+    ctx.fillText(`Player ${winner.id + 1} (${playerType}) Wins!`, centerX, centerY);
 
     // Draw particle count
     ctx.font = '24px sans-serif';
@@ -160,13 +231,16 @@ class App {
     ctx.fillText('Press R to restart', centerX, centerY + 120);
   }
 
-  restartGame(): void {
+  async restartGame(): Promise<void> {
     console.log('Restarting game...');
 
     // Destroy old game
     if (this.game) {
       this.game.destroy();
     }
+
+    // Clear model cache to pick up any updated models
+    clearModelCache();
 
     // Create new game with same config
     const config: GameConfig = {
@@ -175,6 +249,11 @@ class App {
     };
 
     this.game = new Game(config, this.renderer.width, this.renderer.height);
+
+    // Re-setup AI controllers
+    if (AI_CONFIG.enabled) {
+      await this.setupAIControllers();
+    }
 
     // Reset state
     this.setState('playing');
