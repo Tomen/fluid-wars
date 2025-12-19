@@ -26,8 +26,10 @@ export class Game {
 
   // Game state
   private winner: number = -1; // -1 = no winner, 0+ = player ID
+  private readonly headless: boolean;
 
   constructor(config: GameConfig, canvasWidth: number, canvasHeight: number, headless: boolean = false) {
+    this.headless = headless;
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     this.input = new InputManager(headless);
@@ -43,9 +45,12 @@ export class Game {
     // Create obstacles
     this.initObstacles();
 
-    console.log(`Game initialized with ${this.players.length} players`);
-    console.log(`Total particles: ${this.particles.length}`);
-    console.log(`Obstacles: ${this.obstacles.length}`);
+    // Only log in non-headless mode
+    if (!this.headless) {
+      console.log(`Game initialized with ${this.players.length} players`);
+      console.log(`Total particles: ${this.particles.length}`);
+      console.log(`Obstacles: ${this.obstacles.length}`);
+    }
   }
 
   private initPlayers(config: GameConfig): void {
@@ -86,8 +91,6 @@ export class Game {
 
       player.particleCount = particlesPerPlayer;
     }
-
-    console.log(`Spawned ${this.particles.length} total particles (${particlesPerPlayer} per player)`);
   }
 
   private initObstacles(): void {
@@ -116,8 +119,6 @@ export class Game {
         }
       }
     }
-
-    console.log(`Created ${this.obstacles.length} maze obstacles`);
   }
 
   update(dt: number): void {

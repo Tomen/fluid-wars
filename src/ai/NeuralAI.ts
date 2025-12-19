@@ -1,6 +1,8 @@
 // NeuralAI - Neural network-based AI controller
 
-import { Network, NetworkJSON } from 'neataptic';
+import neataptic from 'neataptic';
+import type { Network as NetworkType, NetworkJSON } from 'neataptic';
+const { Network } = neataptic;
 import type { Game } from '../game';
 import type { AIAction } from '../core/AIInterface';
 import type { AIController } from './AIController';
@@ -15,7 +17,7 @@ import { ObservationEncoder, EncoderConfig } from './ObservationEncoder';
  */
 export class NeuralAI implements AIController {
   readonly playerId: number;
-  private network: Network;
+  private network: NetworkType;
   private encoder: ObservationEncoder;
   private name: string;
 
@@ -29,7 +31,7 @@ export class NeuralAI implements AIController {
    */
   constructor(
     playerId: number,
-    network: Network,
+    network: NetworkType,
     encoderConfig?: Partial<EncoderConfig>,
     name?: string
   ) {
@@ -77,14 +79,14 @@ export class NeuralAI implements AIController {
   /**
    * Get the underlying neural network
    */
-  getNetwork(): Network {
+  getNetwork(): NetworkType {
     return this.network;
   }
 
   /**
    * Set a new neural network
    */
-  setNetwork(network: Network): void {
+  setNetwork(network: NetworkType): void {
     this.network = network;
   }
 
