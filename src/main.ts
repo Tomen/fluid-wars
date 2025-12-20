@@ -34,6 +34,11 @@ class App {
       throw new Error('Canvas element not found');
     }
 
+    // Resize canvas to fit window (with small padding)
+    const padding = 20;
+    this.canvas.width = window.innerWidth - padding * 2;
+    this.canvas.height = window.innerHeight - padding * 2;
+
     // Create renderer
     this.renderer = new Renderer(this.canvas);
 

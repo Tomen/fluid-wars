@@ -282,6 +282,8 @@ export class GeneticTrainer {
    */
   loadCheckpoint(checkpoint: Checkpoint): void {
     this.generation = checkpoint.generation;
+    this.lastBestFitness = checkpoint.bestFitness;
+    this.lastAverageFitness = checkpoint.averageFitness;
     this.population = checkpoint.population.map(weights => ({
       weights: weightsFromJSON(weights),
       fitness: 0,

@@ -2,6 +2,7 @@
 
 import type { Game } from '../game';
 import type { Particle } from '../particle';
+import { CNN_CONFIG } from '../config';
 
 /**
  * Configuration for the observation encoder
@@ -22,12 +23,12 @@ export interface EncoderConfig {
 }
 
 /**
- * Default encoder configuration
+ * Default encoder configuration - uses CNN_CONFIG values for consistency
  */
 export const DEFAULT_ENCODER_CONFIG: EncoderConfig = {
-  gridRows: 16,
-  gridCols: 20,
-  channels: 5,
+  gridRows: CNN_CONFIG.gridRows,
+  gridCols: CNN_CONFIG.gridCols,
+  channels: CNN_CONFIG.channels,
   maxDensity: 20,
   canvasWidth: 1200,
   canvasHeight: 800,

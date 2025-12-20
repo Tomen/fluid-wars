@@ -19,6 +19,7 @@ import {
   DIFFICULTY_TIERS,
   MODEL_OUTPUT_DIR,
   CHECKPOINT_DIR,
+  CNN_CONFIG,
 } from './config';
 
 // Ensure output directories exist
@@ -108,7 +109,16 @@ async function main(): Promise<void> {
     matchesPerEvaluation: TRAINING_CONFIG.matchesPerGenome,
     maxStepsPerMatch: TRAINING_CONFIG.maxGameSteps,
     stepsPerSecond: TRAINING_CONFIG.stepsPerSecond,
-    simulatorConfig: TRAINING_CONFIG.simulator,
+    simulatorConfig: {
+      ...TRAINING_CONFIG.simulator,
+      // Use CNN grid dimensions to ensure model input shape matches
+      gridRows: CNN_CONFIG.gridRows,
+      gridCols: CNN_CONFIG.gridCols,
+    },
+    encoderConfig: {
+      gridRows: CNN_CONFIG.gridRows,
+      gridCols: CNN_CONFIG.gridCols,
+    },
   });
 
   // Check for existing checkpoint

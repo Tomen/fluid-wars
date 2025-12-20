@@ -60,19 +60,29 @@ export class Game {
   private initPlayers(config: GameConfig): void {
     const { playerCount } = config;
 
-    // Corner positions with margin from edges
+    // Spawn positions in an ellipse around the center for equidistant spacing
     const margin = 150;
-    const corners = [
-      { x: margin, y: margin },                                    // top-left
-      { x: this.canvasWidth - margin, y: margin },                 // top-right
-      { x: margin, y: this.canvasHeight - margin },                // bottom-left
-      { x: this.canvasWidth - margin, y: this.canvasHeight - margin }, // bottom-right
-    ];
+    const centerX = this.canvasWidth / 2;
+    const centerY = this.canvasHeight / 2;
+
+    // Ellipse radii (fit within canvas with margin)
+    const radiusX = (this.canvasWidth / 2) - margin;
+    const radiusY = (this.canvasHeight / 2) - margin;
+
+    // Generate equidistant spawn positions around the ellipse
+    // Start at top (angle = -PI/2) so player 0 is at top
+    const spawnPositions: { x: number; y: number }[] = [];
+    for (let i = 0; i < playerCount; i++) {
+      const angle = -Math.PI / 2 + (i * 2 * Math.PI) / playerCount;
+      spawnPositions.push({
+        x: centerX + Math.cos(angle) * radiusX,
+        y: centerY + Math.sin(angle) * radiusY,
+      });
+    }
 
     for (let i = 0; i < playerCount; i++) {
       const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
-      // Start players in corners (or spread evenly if more than 4)
-      const pos = corners[i % corners.length];
+      const pos = spawnPositions[i];
 
       this.players.push(new Player(i, color, false, pos.x, pos.y));
     }
@@ -107,17 +117,14 @@ export class Game {
 
   private initObstacles(): void {
     // Create randomly positioned and sized obstacles
-    const { size, margin } = OBSTACLE_CONFIG;
+    const { size, minSizeMultiplier, maxSizeMultiplier, minCount, maxCount, margin, playerMargin } = OBSTACLE_CONFIG;
 
-    // Number of obstacles to generate (roughly similar density to old grid)
-    const numObstacles = 25 + Math.floor(Math.random() * 15); // 25-40 obstacles
+    // Number of obstacles to generate
+    const numObstacles = minCount + Math.floor(Math.random() * (maxCount - minCount + 1));
 
-    // Size variation: obstacles can be 50% to 500% of base size
-    const minSize = size * 0.5;
-    const maxSize = size * 5;
-
-    // Keep track of player spawn areas to avoid blocking them
-    const playerMargin = 200; // Don't place obstacles too close to corners
+    // Size variation based on config multipliers
+    const minSize = size * minSizeMultiplier;
+    const maxSize = size * maxSizeMultiplier;
 
     for (let i = 0; i < numObstacles; i++) {
       // Random size (width and height can differ)

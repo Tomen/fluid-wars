@@ -35,8 +35,12 @@ interface YamlConfig {
   };
   obstacle: {
     size: number;
-    gridSpacing: number;
+    minSizeMultiplier: number;
+    maxSizeMultiplier: number;
+    minCount: number;
+    maxCount: number;
     margin: number;
+    playerMargin: number;
     bounceEnergyLoss: number;
   };
   gameLoop: {
@@ -175,8 +179,12 @@ export const SPATIAL_CONFIG = {
  */
 export const OBSTACLE_CONFIG = {
   size: config.obstacle.size,
-  gridSpacing: config.obstacle.gridSpacing,
+  minSizeMultiplier: config.obstacle.minSizeMultiplier,
+  maxSizeMultiplier: config.obstacle.maxSizeMultiplier,
+  minCount: config.obstacle.minCount,
+  maxCount: config.obstacle.maxCount,
   margin: config.obstacle.margin,
+  playerMargin: config.obstacle.playerMargin,
   bounceEnergyLoss: config.obstacle.bounceEnergyLoss,
 } as const;
 

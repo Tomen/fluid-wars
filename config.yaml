@@ -5,17 +5,18 @@
 # GAME SETUP
 # =============================================================================
 game:
-  playerCount: 4
+  playerCount: 8
   particlesPerPlayer: 200
-  canvasWidth: 1200
-  canvasHeight: 800
+  # Canvas size is now dynamic based on window size (see renderer.ts)
+  canvasWidth: 1600
+  canvasHeight: 900
 
 # =============================================================================
 # PARTICLE PHYSICS
 # =============================================================================
 particle:
   # Movement
-  acceleration: 200      # units/sec² - how fast particles accelerate toward cursor
+  acceleration: 100      # units/sec² - how fast particles accelerate toward cursor
   maxVelocity: 150       # units/sec - maximum particle speed
   friction: 0.98         # per frame - velocity decay (0.98 = 2% loss per frame)
 
@@ -23,8 +24,8 @@ particle:
   radius: 8              # pixels - visual size of particles
 
   # Collision and Repulsion
-  repulsionRadius: 32    # pixels - distance at which particles repel each other
-  repulsionStrength: 180 # force units - base repulsion force
+  repulsionRadius: 24    # pixels - distance at which particles repel each other
+  repulsionStrength: 2000 # force units - base repulsion force
   enemyRepulsionMultiplier: 1.0  # multiplier - extra repulsion between enemy particles
 
   # Spawn
@@ -34,8 +35,8 @@ particle:
 # CONVERSION SYSTEM
 # =============================================================================
 conversion:
-  radius: 20             # pixels - distance at which conversion can occur
-  rate: 1.0              # progress/sec - how fast conversion builds up when outnumbered
+  radius: 30             # pixels - distance at which conversion can occur
+  rate: 0.5              # progress/sec - how fast conversion builds up when outnumbered
   threshold: 1.0         # progress required to convert
   decayMultiplier: 2     # decay rate multiplier when not being converted
 
@@ -56,9 +57,13 @@ spatial:
 # OBSTACLES / MAZE
 # =============================================================================
 obstacle:
-  size: 40               # pixels - width/height of obstacle squares
-  gridSpacing: 100       # pixels - distance between obstacle centers
+  size: 40               # pixels - base size for obstacles
+  minSizeMultiplier: 0.5 # multiplier - minimum size (0.5 = 50% of base)
+  maxSizeMultiplier: 3   # multiplier - maximum size (5 = 500% of base)
+  minCount: 25           # minimum number of obstacles
+  maxCount: 40           # maximum number of obstacles
   margin: 100            # pixels - margin from canvas edges
+  playerMargin: 200      # pixels - keep obstacles away from corners (player spawns)
   bounceEnergyLoss: 0.5  # multiplier - energy retained after bouncing
 
 # =============================================================================
@@ -74,7 +79,7 @@ gameLoop:
 win:
   mode: percentage       # 'elimination' or 'percentage'
   eliminationThreshold: 0   # particles - opponent must have this many or fewer to lose
-  percentageThreshold: 0.8  # ratio - control this percentage to win (percentage mode)
+  percentageThreshold: 0.9  # ratio - control this percentage to win (percentage mode)
 
 # =============================================================================
 # AI CONFIGURATION
@@ -83,7 +88,7 @@ ai:
   enabled: true          # whether to use AI opponents
   # Which players are AI controlled (0-indexed)
   # Example: [1, 2, 3] means players 2, 3, 4 are AI
-  aiPlayers: [1, 2, 3]
+  aiPlayers: [1, 2, 3, 4, 5, 6, 7]
   # Default AI type: 'random', 'aggressive', or 'neural'
   defaultAIType: neural
   # Difficulty for neural AI: 'easy', 'medium', 'hard', 'expert'
@@ -106,7 +111,7 @@ cnn:
   denseUnits: 64             # Dense layer before output
 
   # Input grid dimensions (must match ObservationEncoder)
-  gridRows: 16
+  gridRows: 20
   gridCols: 20
   channels: 5                # friendly, enemy, obstacles, friendlyVel, enemyVel
 
@@ -115,18 +120,18 @@ cnn:
 # =============================================================================
 training:
   # Genetic algorithm settings
-  populationSize: 10         # Number of networks in population (small for testing)
-  eliteCount: 2              # Top N kept unchanged each generation
+  populationSize: 100         # Number of networks in population (small for testing)
+  eliteCount: 5              # Top N kept unchanged each generation
   mutationRate: 0.1          # Probability of mutating each weight
   mutationStrength: 0.3      # Std dev of Gaussian noise for mutations
   crossoverRate: 0.5         # Probability of crossover vs mutation-only
   maxGenerations: 500
-  checkpointInterval: 5      # Save every N generations
+  checkpointInterval: 1      # Save every N generations
   verbose: true
 
   # Evaluation settings
   matchesPerGenome: 1        # Matches per genome evaluation (reduced for testing)
-  maxGameSteps: 600          # Steps per match (~10 seconds at 60 FPS, for testing)
+  maxGameSteps: 3600          # Steps per match (~10 seconds at 60 FPS, for testing)
   stepsPerSecond: 60         # For calculating time bonus
 
   # Simulator settings (for training matches)
