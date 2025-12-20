@@ -8,9 +8,8 @@ import { InputManager } from './input';
 import { SpatialHash } from './collision';
 import { ConversionSystem } from './conversion';
 import { PLAYER_COLORS } from './types';
-import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG, PLAYER_CONFIG } from './config';
+import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
 import type { AIController } from './ai/AIController';
-import { clamp } from './utils';
 
 export class Game {
   private players: Player[] = [];
@@ -107,30 +106,59 @@ export class Game {
   }
 
   private initObstacles(): void {
-    // Create maze-like checker pattern of obstacles
-    const { size, gridSpacing, margin } = OBSTACLE_CONFIG;
+    // Create randomly positioned and sized obstacles
+    const { size, margin } = OBSTACLE_CONFIG;
 
-    // Calculate grid dimensions
-    const cols = Math.floor((this.canvasWidth - 2 * margin) / gridSpacing);
-    const rows = Math.floor((this.canvasHeight - 2 * margin) / gridSpacing);
+    // Number of obstacles to generate (roughly similar density to old grid)
+    const numObstacles = 25 + Math.floor(Math.random() * 15); // 25-40 obstacles
 
-    // Create checker pattern
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        // Only place obstacles in checker pattern (skip some cells)
-        if ((row + col) % 2 === 0) {
-          const x = margin + col * gridSpacing;
-          const y = margin + row * gridSpacing;
+    // Size variation: obstacles can be 50% to 500% of base size
+    const minSize = size * 0.5;
+    const maxSize = size * 5;
 
-          this.obstacles.push(new Obstacle({
-            type: 'rect',
-            x: x - size / 2,
-            y: y - size / 2,
-            width: size,
-            height: size
-          }));
+    // Keep track of player spawn areas to avoid blocking them
+    const playerMargin = 200; // Don't place obstacles too close to corners
+
+    for (let i = 0; i < numObstacles; i++) {
+      // Random size (width and height can differ)
+      const width = minSize + Math.random() * (maxSize - minSize);
+      const height = minSize + Math.random() * (maxSize - minSize);
+
+      // Random position within canvas bounds (with margin)
+      const x = margin + Math.random() * (this.canvasWidth - 2 * margin - width);
+      const y = margin + Math.random() * (this.canvasHeight - 2 * margin - height);
+
+      // Check if too close to any corner (player spawn areas)
+      const corners = [
+        { x: 0, y: 0 },
+        { x: this.canvasWidth, y: 0 },
+        { x: 0, y: this.canvasHeight },
+        { x: this.canvasWidth, y: this.canvasHeight },
+      ];
+
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+
+      let tooCloseToCorner = false;
+      for (const corner of corners) {
+        const dist = Math.sqrt((centerX - corner.x) ** 2 + (centerY - corner.y) ** 2);
+        if (dist < playerMargin) {
+          tooCloseToCorner = true;
+          break;
         }
       }
+
+      if (tooCloseToCorner) {
+        continue; // Skip this obstacle, don't block player spawns
+      }
+
+      this.obstacles.push(new Obstacle({
+        type: 'rect',
+        x,
+        y,
+        width,
+        height
+      }));
     }
   }
 
@@ -144,17 +172,10 @@ export class Game {
         const ai = this.aiControllers.get(i)!;
         const action = ai.getAction(this);
 
-        // Set cursor position directly from AI (normalized 0-1 -> canvas coords)
-        player.cursorX = clamp(
-          action.targetX * this.canvasWidth,
-          PLAYER_CONFIG.cursorRadius,
-          this.canvasWidth - PLAYER_CONFIG.cursorRadius
-        );
-        player.cursorY = clamp(
-          action.targetY * this.canvasHeight,
-          PLAYER_CONFIG.cursorRadius,
-          this.canvasHeight - PLAYER_CONFIG.cursorRadius
-        );
+        // Move cursor towards target at same speed as human players
+        const targetX = action.targetX * this.canvasWidth;
+        const targetY = action.targetY * this.canvasHeight;
+        player.moveCursorTowards(targetX, targetY, dt, this.canvasWidth, this.canvasHeight);
       } else {
         // Human player - use keyboard input
         const input = this.input.getPlayerInput(i);

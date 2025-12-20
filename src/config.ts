@@ -57,21 +57,55 @@ interface YamlConfig {
   render: {
     backgroundColor: string;
   };
+  cnn: {
+    conv1Filters: number;
+    conv2Filters: number;
+    kernelSize: number;
+    denseUnits: number;
+    gridRows: number;
+    gridCols: number;
+    channels: number;
+  };
+  training: {
+    populationSize: number;
+    eliteCount: number;
+    mutationRate: number;
+    mutationStrength: number;
+    crossoverRate: number;
+    maxGenerations: number;
+    checkpointInterval: number;
+    verbose: boolean;
+    matchesPerGenome: number;
+    maxGameSteps: number;
+    stepsPerSecond: number;
+    simulator: {
+      playerCount: number;
+      particlesPerPlayer: number;
+      canvasWidth: number;
+      canvasHeight: number;
+    };
+    difficultyTiers: {
+      easy: number;
+      medium: number;
+      hard: number;
+      expert: number;
+    };
+  };
 }
 
 // Load config based on environment
 let config: YamlConfig;
 
-// Check if we're in a browser environment (Vite)
+// Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';
 
 if (isBrowser) {
-  // Browser - use Vite plugin import (bundled at build time)
-  // @ts-ignore - Vite handles this import at build time
-  const rawConfig = await import('../config.yaml');
-  config = rawConfig.default as YamlConfig;
+  // Browser - Vite transforms this import at build time via yaml plugin
+  // @ts-ignore - Vite handles yaml imports
+  const yamlModule = await import('../config.yaml');
+  config = yamlModule.default as YamlConfig;
 } else {
-  // Node.js - read file directly using dynamic imports
+  // Node.js - use dynamic imports (ESM compatible)
   const fs = await import('fs');
   const path = await import('path');
   const yaml = await import('js-yaml');
@@ -178,4 +212,36 @@ export const AI_CONFIG = {
  */
 export const RENDER_CONFIG = {
   backgroundColor: config.render.backgroundColor,
+} as const;
+
+/**
+ * CNN ARCHITECTURE
+ */
+export const CNN_CONFIG = {
+  conv1Filters: config.cnn.conv1Filters,
+  conv2Filters: config.cnn.conv2Filters,
+  kernelSize: config.cnn.kernelSize,
+  denseUnits: config.cnn.denseUnits,
+  gridRows: config.cnn.gridRows,
+  gridCols: config.cnn.gridCols,
+  channels: config.cnn.channels,
+} as const;
+
+/**
+ * TRAINING
+ */
+export const TRAINING_CONFIG = {
+  populationSize: config.training.populationSize,
+  eliteCount: config.training.eliteCount,
+  mutationRate: config.training.mutationRate,
+  mutationStrength: config.training.mutationStrength,
+  crossoverRate: config.training.crossoverRate,
+  maxGenerations: config.training.maxGenerations,
+  checkpointInterval: config.training.checkpointInterval,
+  verbose: config.training.verbose,
+  matchesPerGenome: config.training.matchesPerGenome,
+  maxGameSteps: config.training.maxGameSteps,
+  stepsPerSecond: config.training.stepsPerSecond,
+  simulator: config.training.simulator,
+  difficultyTiers: config.training.difficultyTiers,
 } as const;

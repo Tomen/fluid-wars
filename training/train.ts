@@ -1,13 +1,21 @@
-// Training entry point for NEAT AI evolution
-// Run with: npx ts-node training/train.ts
+// Training entry point for CNN AI evolution
+// Run with: npm run train
+
+// Try to use Node.js backend (faster), fall back to CPU if native bindings fail
+try {
+  await import('@tensorflow/tfjs-node');
+  console.log('Using TensorFlow.js Node.js backend');
+} catch (e) {
+  console.log('Native backend unavailable, using CPU backend');
+  await import('@tensorflow/tfjs');
+}
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { NEATTrainer, Checkpoint } from '../src/training/NEATTrainer';
-import { createFitnessFunction } from '../src/training/FitnessEvaluator';
+import { GeneticTrainer, Checkpoint } from '../src/training/GeneticTrainer';
+import { getWeights, weightsToJSON } from '../src/ai/CNNModel';
 import {
-  TRAINER_CONFIG,
-  EVALUATOR_CONFIG,
+  TRAINING_CONFIG,
   DIFFICULTY_TIERS,
   MODEL_OUTPUT_DIR,
   CHECKPOINT_DIR,
@@ -29,32 +37,35 @@ function saveCheckpoint(checkpoint: Checkpoint): void {
   const filename = path.join(CHECKPOINT_DIR, `checkpoint_gen_${checkpoint.generation}.json`);
   fs.writeFileSync(filename, JSON.stringify(checkpoint, null, 2));
   console.log(`Saved checkpoint: ${filename}`);
+}
 
-  // Always save the latest model to ai_easy.json with generation metadata
-  const latestModelPath = path.join(MODEL_OUTPUT_DIR, 'ai_easy.json');
-  const modelWithMetadata = {
-    generation: checkpoint.generation,
-    bestFitness: checkpoint.bestFitness,
-    averageFitness: checkpoint.averageFitness,
-    network: checkpoint.bestGenome,
+// Save the best model weights
+function saveBestModel(trainer: GeneticTrainer, generation: number, fitness: number, avgFitness: number): void {
+  const model = trainer.getBestModel();
+  const weights = getWeights(model);
+
+  // Save to ai_easy.json (always updated with latest best)
+  const modelData = {
+    generation,
+    bestFitness: fitness,
+    averageFitness: avgFitness,
+    weights: weightsToJSON(weights),
   };
-  fs.writeFileSync(latestModelPath, JSON.stringify(modelWithMetadata, null, 2));
-  console.log(`Updated latest model: ${latestModelPath} (gen ${checkpoint.generation})`);
 
-  // Check if this generation matches a difficulty tier (for other tiers)
+  const latestPath = path.join(MODEL_OUTPUT_DIR, 'ai_easy.json');
+  fs.writeFileSync(latestPath, JSON.stringify(modelData, null, 2));
+  console.log(`Updated latest model: ${latestPath} (gen ${generation})`);
+
+  // Check difficulty tier saves
   for (const [tier, config] of Object.entries(DIFFICULTY_TIERS)) {
-    if (tier !== 'easy' && checkpoint.generation === config.generation) {
-      const modelPath = path.join(MODEL_OUTPUT_DIR, config.filename);
-      const tierModel = {
-        generation: checkpoint.generation,
-        bestFitness: checkpoint.bestFitness,
-        averageFitness: checkpoint.averageFitness,
-        network: checkpoint.bestGenome,
-      };
-      fs.writeFileSync(modelPath, JSON.stringify(tierModel, null, 2));
-      console.log(`Saved ${tier} difficulty model: ${modelPath}`);
+    if (tier !== 'easy' && generation === config.generation) {
+      const tierPath = path.join(MODEL_OUTPUT_DIR, config.filename);
+      fs.writeFileSync(tierPath, JSON.stringify(modelData, null, 2));
+      console.log(`Saved ${tier} difficulty model: ${tierPath}`);
     }
   }
+
+  model.dispose();
 }
 
 // Load the latest checkpoint if available
@@ -85,15 +96,20 @@ function loadLatestCheckpoint(): Checkpoint | null {
 // Main training function
 async function main(): Promise<void> {
   console.log('='.repeat(60));
-  console.log('Fluid Wars AI Training');
+  console.log('Fluid Wars AI Training (CNN + Genetic Algorithm)');
   console.log('='.repeat(60));
   console.log();
 
   // Ensure directories exist
   ensureDirectories();
 
-  // Create trainer
-  const trainer = new NEATTrainer(TRAINER_CONFIG);
+  // Create trainer with evaluator config
+  const trainer = new GeneticTrainer({
+    matchesPerEvaluation: TRAINING_CONFIG.matchesPerGenome,
+    maxStepsPerMatch: TRAINING_CONFIG.maxGameSteps,
+    stepsPerSecond: TRAINING_CONFIG.stepsPerSecond,
+    simulatorConfig: TRAINING_CONFIG.simulator,
+  });
 
   // Check for existing checkpoint
   const checkpoint = loadLatestCheckpoint();
@@ -105,64 +121,67 @@ async function main(): Promise<void> {
     trainer.initialize();
   }
 
-  // Set up fitness function
-  const fitnessFunction = createFitnessFunction(EVALUATOR_CONFIG);
-  trainer.setFitnessFunction(fitnessFunction);
+  // Display configuration
+  console.log();
+  console.log('Training configuration:');
+  console.log(`  Population size: ${TRAINING_CONFIG.populationSize}`);
+  console.log(`  Max generations: ${TRAINING_CONFIG.maxGenerations}`);
+  console.log(`  Matches per genome: ${TRAINING_CONFIG.matchesPerGenome}`);
+  console.log(`  Mutation rate: ${TRAINING_CONFIG.mutationRate}`);
+  console.log(`  Crossover rate: ${TRAINING_CONFIG.crossoverRate}`);
+  console.log();
 
-  // Set up generation callback
-  trainer.setGenerationCallback((stats, _best) => {
+  const startTime = Date.now();
+  let running = true;
+
+  // Handle graceful shutdown
+  process.on('SIGINT', () => {
+    if (!running) {
+      console.log('\nForce quitting...');
+      process.exit(1);
+    }
+    running = false;
+    console.log('\nGracefully shutting down after current generation...');
+  });
+
+  // Training loop
+  const startGen = trainer.getGeneration();
+  while (running && trainer.getGeneration() < TRAINING_CONFIG.maxGenerations) {
+    const gen = trainer.getGeneration();
+    const progress = ((gen / TRAINING_CONFIG.maxGenerations) * 100).toFixed(1);
+
+    // Run one generation
+    const stats = await trainer.runGeneration();
+
     // Log progress
-    const progress = (stats.generation / (TRAINER_CONFIG.maxGenerations || 500) * 100).toFixed(1);
     console.log(
       `[${progress}%] Gen ${stats.generation}: ` +
       `Best=${stats.bestFitness.toFixed(1)}, ` +
       `Avg=${stats.averageFitness.toFixed(1)}, ` +
-      `Time=${stats.elapsedTime}ms`
+      `Time=${(stats.elapsedTime / 1000).toFixed(1)}s`
     );
-  });
 
-  // Set up checkpoint callback
-  trainer.setCheckpointCallback(saveCheckpoint);
-
-  // Handle graceful shutdown
-  let shuttingDown = false;
-  process.on('SIGINT', () => {
-    if (shuttingDown) {
-      console.log('\nForce quitting...');
-      process.exit(1);
+    // Save checkpoint at interval
+    if ((stats.generation + 1) % TRAINING_CONFIG.checkpointInterval === 0) {
+      const cp = trainer.createCheckpoint();
+      saveCheckpoint(cp);
+      saveBestModel(trainer, cp.generation, cp.bestFitness, cp.averageFitness);
     }
-    shuttingDown = true;
-    console.log('\nGracefully shutting down (press Ctrl+C again to force)...');
-    trainer.stop();
-  });
-
-  // Start training
-  console.log();
-  console.log('Training configuration:');
-  console.log(`  Population size: ${TRAINER_CONFIG.populationSize}`);
-  console.log(`  Max generations: ${TRAINER_CONFIG.maxGenerations}`);
-  console.log(`  Input size: ${TRAINER_CONFIG.inputSize}`);
-  console.log(`  Matches per evaluation: ${EVALUATOR_CONFIG.matchesPerEvaluation}`);
-  console.log();
-
-  const startTime = Date.now();
-
-  try {
-    const bestGenome = await trainer.train();
-
-    // Save final best model
-    const finalModelPath = path.join(MODEL_OUTPUT_DIR, 'ai_final.json');
-    fs.writeFileSync(finalModelPath, JSON.stringify(bestGenome.toJSON(), null, 2));
-    console.log(`Saved final model: ${finalModelPath}`);
-
-  } catch (error) {
-    console.error('Training error:', error);
   }
+
+  // Save final checkpoint
+  const finalCheckpoint = trainer.createCheckpoint();
+  saveCheckpoint(finalCheckpoint);
+  saveBestModel(trainer, finalCheckpoint.generation, finalCheckpoint.bestFitness, finalCheckpoint.averageFitness);
+
+  // Cleanup
+  trainer.destroy();
 
   const totalTime = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
   console.log();
   console.log('='.repeat(60));
   console.log(`Training complete! Total time: ${totalTime} minutes`);
+  console.log(`Trained ${trainer.getGeneration() - startGen} generations`);
   console.log('='.repeat(60));
 }
 

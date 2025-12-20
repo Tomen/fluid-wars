@@ -30,6 +30,34 @@ export class Player {
     this.cursorY = clamp(this.cursorY, PLAYER_CONFIG.cursorRadius, canvasHeight - PLAYER_CONFIG.cursorRadius);
   }
 
+  /**
+   * Move cursor towards a target position at the same speed as human players
+   * Used by AI controllers to have fair movement speed
+   */
+  moveCursorTowards(targetX: number, targetY: number, dt: number, canvasWidth: number, canvasHeight: number): void {
+    // Calculate direction to target
+    const dx = targetX - this.cursorX;
+    const dy = targetY - this.cursorY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    // If we're close enough, just snap to target
+    const maxMove = PLAYER_CONFIG.cursorSpeed * dt;
+    if (distance <= maxMove) {
+      this.cursorX = targetX;
+      this.cursorY = targetY;
+    } else {
+      // Move towards target at cursor speed
+      const nx = dx / distance;
+      const ny = dy / distance;
+      this.cursorX += nx * maxMove;
+      this.cursorY += ny * maxMove;
+    }
+
+    // Keep cursor within bounds
+    this.cursorX = clamp(this.cursorX, PLAYER_CONFIG.cursorRadius, canvasWidth - PLAYER_CONFIG.cursorRadius);
+    this.cursorY = clamp(this.cursorY, PLAYER_CONFIG.cursorRadius, canvasHeight - PLAYER_CONFIG.cursorRadius);
+  }
+
   draw(ctx: CanvasRenderingContext2D): void {
     const r = PLAYER_CONFIG.cursorRadius;
 

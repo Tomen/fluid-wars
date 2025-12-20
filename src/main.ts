@@ -1,6 +1,7 @@
 // Fluid Wars - Main Application Entry Point
 
 import type { AppState, GameConfig } from './types';
+import { PLAYER_COLOR_NAMES } from './types';
 import { Game } from './game';
 import { Renderer } from './renderer';
 import { GAME_CONFIG, GAME_LOOP_CONFIG, AI_CONFIG } from './config';
@@ -86,8 +87,8 @@ class App {
         try {
           const modelAvailable = await isModelAvailable(AI_CONFIG.neuralDifficulty);
           if (modelAvailable) {
-            const { network, metadata } = await loadModelWithMetadata(AI_CONFIG.neuralDifficulty);
-            controller = new NeuralAI(playerId, network);
+            const { model, metadata } = await loadModelWithMetadata(AI_CONFIG.neuralDifficulty);
+            controller = new NeuralAI(playerId, model);
             // Store metadata for UI display (only need to store once since all AI use same model)
             this.aiModelMetadata = metadata;
             const genInfo = metadata.generation !== null ? ` gen ${metadata.generation}` : '';
@@ -172,9 +173,10 @@ class App {
       // Show player info
       for (let i = 0; i < players.length; i++) {
         const player = players[i];
+        const colorName = PLAYER_COLOR_NAMES[i % PLAYER_COLOR_NAMES.length];
         const controlType = player.isAI ? 'AI' : (i === 0 ? 'WASD' : 'Arrows');
         this.renderer.drawDebugText(
-          `P${i + 1} (${controlType}): ${player.particleCount} particles | Cursor: (${Math.floor(player.cursorX)}, ${Math.floor(player.cursorY)})`,
+          `${colorName} (${controlType}): ${player.particleCount} particles`,
           10,
           40 + i * 20
         );
@@ -218,8 +220,9 @@ class App {
     // Draw player info
     ctx.fillStyle = '#ffffff';
     ctx.font = '36px sans-serif';
+    const colorName = PLAYER_COLOR_NAMES[winner.id % PLAYER_COLOR_NAMES.length];
     const playerType = winner.isAI ? 'AI' : (winner.id === 0 ? 'WASD' : 'Arrows');
-    ctx.fillText(`Player ${winner.id + 1} (${playerType}) Wins!`, centerX, centerY);
+    ctx.fillText(`${colorName} (${playerType}) Wins!`, centerX, centerY);
 
     // Draw particle count
     ctx.font = '24px sans-serif';

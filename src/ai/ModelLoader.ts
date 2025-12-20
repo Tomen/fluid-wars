@@ -1,8 +1,7 @@
 // ModelLoader - Load trained AI models in the browser
 
-import neataptic from 'neataptic';
-import type { Network as NetworkType, NetworkJSON } from 'neataptic';
-const { Network } = neataptic;
+import * as tf from '@tensorflow/tfjs';
+import { createModel, setWeights, weightsFromJSON } from './CNNModel';
 
 /**
  * Available AI difficulty levels
@@ -23,7 +22,7 @@ export interface ModelMetadata {
  * Result of loading a model
  */
 export interface LoadedModel {
-  network: NetworkType;
+  model: tf.Sequential;
   metadata: ModelMetadata;
 }
 
@@ -34,7 +33,7 @@ interface ModelFileFormat {
   generation?: number;
   bestFitness?: number;
   averageFitness?: number;
-  network: NetworkJSON;
+  weights: number[];
 }
 
 /**
@@ -56,11 +55,11 @@ const modelCache = new Map<AIDifficulty, LoadedModel>();
  * Load a trained AI model from a JSON file
  *
  * @param difficulty The difficulty level to load
- * @returns The loaded neural network
+ * @returns The loaded TensorFlow model
  */
-export async function loadModel(difficulty: Exclude<AIDifficulty, 'random'>): Promise<NetworkType> {
+export async function loadModel(difficulty: Exclude<AIDifficulty, 'random'>): Promise<tf.Sequential> {
   const loaded = await loadModelWithMetadata(difficulty);
-  return loaded.network;
+  return loaded.model;
 }
 
 /**
@@ -84,35 +83,19 @@ export async function loadModelWithMetadata(difficulty: Exclude<AIDifficulty, 'r
       throw new Error(`Failed to load model: ${response.status} ${response.statusText}`);
     }
 
-    const json = await response.json();
+    const json = await response.json() as ModelFileFormat;
 
-    // Support both formats: raw NetworkJSON or wrapped with metadata
-    let networkJson: NetworkJSON;
-    let generation: number | null = null;
-
-    let bestFitness: number | null = null;
-    let averageFitness: number | null = null;
-
-    if ('network' in json && json.network) {
-      // New format with metadata wrapper
-      const modelFile = json as ModelFileFormat;
-      networkJson = modelFile.network;
-      generation = modelFile.generation ?? null;
-      bestFitness = modelFile.bestFitness ?? null;
-      averageFitness = modelFile.averageFitness ?? null;
-    } else {
-      // Legacy format: raw network JSON
-      networkJson = json as NetworkJSON;
-    }
-
-    const network = Network.fromJSON(networkJson);
+    // Create model and load weights
+    const model = createModel();
+    const weights = weightsFromJSON(json.weights);
+    setWeights(model, weights);
 
     const loaded: LoadedModel = {
-      network,
+      model,
       metadata: {
-        generation,
-        bestFitness,
-        averageFitness,
+        generation: json.generation ?? null,
+        bestFitness: json.bestFitness ?? null,
+        averageFitness: json.averageFitness ?? null,
         difficulty,
       },
     };
@@ -120,7 +103,7 @@ export async function loadModelWithMetadata(difficulty: Exclude<AIDifficulty, 'r
     // Cache the model
     modelCache.set(difficulty, loaded);
 
-    console.log(`Loaded AI model: ${difficulty}${generation !== null ? ` (gen ${generation})` : ''}`);
+    console.log(`Loaded AI model: ${difficulty}${json.generation !== undefined ? ` (gen ${json.generation})` : ''}`);
     return loaded;
   } catch (error) {
     console.error(`Error loading AI model (${difficulty}):`, error);
@@ -160,21 +143,29 @@ export async function getAvailableDifficulties(): Promise<AIDifficulty[]> {
 }
 
 /**
- * Clear the model cache
+ * Clear the model cache (disposes TensorFlow models)
  */
 export function clearModelCache(): void {
+  for (const loaded of modelCache.values()) {
+    loaded.model.dispose();
+  }
   modelCache.clear();
 }
 
 /**
- * Load a model from a JSON object directly (for testing)
+ * Load a model from weights array directly (for testing)
  */
-export function loadModelFromJSON(json: NetworkJSON, cacheAs?: AIDifficulty, generation?: number): NetworkType {
-  const network = Network.fromJSON(json);
+export function loadModelFromWeights(
+  weights: number[],
+  cacheAs?: AIDifficulty,
+  generation?: number
+): tf.Sequential {
+  const model = createModel();
+  setWeights(model, weightsFromJSON(weights));
 
   if (cacheAs) {
     modelCache.set(cacheAs, {
-      network,
+      model,
       metadata: {
         generation: generation ?? null,
         bestFitness: null,
@@ -184,5 +175,5 @@ export function loadModelFromJSON(json: NetworkJSON, cacheAs?: AIDifficulty, gen
     });
   }
 
-  return network;
+  return model;
 }

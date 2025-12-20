@@ -34,14 +34,17 @@ export const DEFAULT_ENCODER_CONFIG: EncoderConfig = {
 };
 
 /**
- * Encodes game state into a fixed-size observation vector for neural networks
+ * Encodes game state into a 3D grid observation for CNN input
  *
- * The observation consists of:
- * 1. A spatial grid with multiple channels (particle densities, obstacles, etc.)
- * 2. Cursor positions for all players (normalized)
- * 3. Particle counts for all players (normalized)
+ * The observation is a 3D grid with shape [gridRows][gridCols][channels]:
+ * - Channel 0: friendly particle density (0-1)
+ * - Channel 1: enemy particle density (all enemies combined, 0-1)
+ * - Channel 2: obstacle presence (0 or 1)
+ * - Channel 3: friendly particle velocity magnitude (0-1)
+ * - Channel 4: enemy particle velocity magnitude (0-1)
  *
  * All values are normalized to [0, 1] range.
+ * Works with 2-8 players (all non-self players treated as "enemy").
  */
 export class ObservationEncoder {
   private config: EncoderConfig;
@@ -52,67 +55,6 @@ export class ObservationEncoder {
     this.config = { ...DEFAULT_ENCODER_CONFIG, ...config };
     this.cellWidth = this.config.canvasWidth / this.config.gridCols;
     this.cellHeight = this.config.canvasHeight / this.config.gridRows;
-  }
-
-  /**
-   * Get the total size of the flattened observation vector
-   */
-  getObservationSize(): number {
-    const gridSize = this.config.gridRows * this.config.gridCols * this.config.channels;
-    const cursorSize = 4; // 2 players * 2 coordinates (x, y)
-    const countSize = 2;  // 2 players particle counts
-    return gridSize + cursorSize + countSize;
-  }
-
-  /**
-   * Encode the game state from a specific player's perspective
-   *
-   * @param game The game instance
-   * @param playerId The player's perspective (0 or 1)
-   * @returns Flattened observation vector
-   */
-  encode(game: Game, playerId: number): number[] {
-    const players = game.getPlayers();
-    const particles = game.getParticles();
-    const obstacles = game.getObstacles();
-    const totalParticles = particles.length;
-
-    // Build the grid
-    const grid = this.buildGrid(particles, obstacles, playerId);
-
-    // Flatten grid to 1D array
-    const flatGrid = this.flattenGrid(grid);
-
-    // Encode cursor positions (from this player's perspective)
-    // Self cursor first, then primary enemy cursor
-    const selfPlayer = players[playerId];
-
-    // Find primary enemy (first player that isn't us, or player with most particles)
-    let enemyPlayer = players.find((_p, i) => i !== playerId);
-    if (!enemyPlayer) {
-      enemyPlayer = selfPlayer; // Fallback (shouldn't happen)
-    }
-
-    const cursorData = [
-      selfPlayer.cursorX / this.config.canvasWidth,
-      selfPlayer.cursorY / this.config.canvasHeight,
-      enemyPlayer.cursorX / this.config.canvasWidth,
-      enemyPlayer.cursorY / this.config.canvasHeight,
-    ];
-
-    // Encode particle counts (normalized by total)
-    // For multi-player: self count vs all enemies combined
-    const enemyParticleCount = players
-      .filter((_, i) => i !== playerId)
-      .reduce((sum, p) => sum + p.particleCount, 0);
-
-    const countData = [
-      totalParticles > 0 ? selfPlayer.particleCount / totalParticles : 0.5,
-      totalParticles > 0 ? enemyParticleCount / totalParticles : 0.5,
-    ];
-
-    // Combine all features
-    return [...flatGrid, ...cursorData, ...countData];
   }
 
   /**
@@ -243,21 +185,17 @@ export class ObservationEncoder {
   }
 
   /**
-   * Flatten the 3D grid to a 1D array
-   * Order: row-major, then channels
+   * Encode the game state as a 3D grid for CNN input
+   * Returns shape [gridRows][gridCols][channels]
+   *
+   * @param game The game instance
+   * @param playerId The player's perspective (0 to playerCount-1)
+   * @returns 3D grid observation
    */
-  private flattenGrid(grid: number[][][]): number[] {
-    const flat: number[] = [];
-
-    for (let r = 0; r < this.config.gridRows; r++) {
-      for (let c = 0; c < this.config.gridCols; c++) {
-        for (let ch = 0; ch < this.config.channels; ch++) {
-          flat.push(grid[r][c][ch]);
-        }
-      }
-    }
-
-    return flat;
+  encode3D(game: Game, playerId: number): number[][][] {
+    const particles = game.getParticles();
+    const obstacles = game.getObstacles();
+    return this.buildGrid(particles, obstacles, playerId);
   }
 
   /**

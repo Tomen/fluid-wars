@@ -1,6 +1,6 @@
-// FitnessEvaluator - Evaluate genome fitness through multi-player matches
+// FitnessEvaluator - Evaluate model fitness through multi-player matches
 
-import type { Network as NetworkType } from 'neataptic';
+import * as tf from '@tensorflow/tfjs';
 import { GameSimulator } from '../core/GameSimulator';
 import type { SimulatorConfig, AIAction } from '../core/AIInterface';
 import { NeuralAI } from '../ai/NeuralAI';
@@ -34,7 +34,7 @@ export const DEFAULT_EVALUATOR_CONFIG: EvaluatorConfig = {
   maxStepsPerMatch: 1800, // 30 seconds at 60 FPS
   stepsPerSecond: 60,
   simulatorConfig: {
-    playerCount: 3,
+    playerCount: 4,
     particlesPerPlayer: 100,
     maxSteps: 1800,
   },
@@ -52,8 +52,8 @@ export interface MatchResult {
 }
 
 /**
- * Fitness evaluator for NEAT genomes
- * Runs multi-player matches between genomes and computes fitness scores
+ * Fitness evaluator for CNN models
+ * Runs multi-player matches between models and computes fitness scores
  */
 export class FitnessEvaluator {
   private config: EvaluatorConfig;
@@ -61,35 +61,35 @@ export class FitnessEvaluator {
 
   constructor(config: Partial<EvaluatorConfig> = {}) {
     this.config = { ...DEFAULT_EVALUATOR_CONFIG, ...config };
-    this.playerCount = this.config.simulatorConfig.playerCount || 3;
+    this.playerCount = this.config.simulatorConfig.playerCount || 4;
   }
 
   /**
-   * Evaluate a genome's fitness by playing matches
-   * The genome plays as player 0 against randomly selected opponents
+   * Evaluate a model's fitness by playing matches
+   * The model plays as player 0 against randomly selected opponents
    *
-   * @param genome The genome to evaluate
-   * @param population Full population to sample opponents from
+   * @param model The model to evaluate
+   * @param population Full population of models to sample opponents from
    * @returns Fitness score
    */
-  async evaluateGenome(genome: NetworkType, population: NetworkType[]): Promise<number> {
+  async evaluateModel(model: tf.Sequential, population: tf.Sequential[]): Promise<number> {
     let totalScore = 0;
     let matchCount = 0;
 
     // Get opponents (everyone except self)
-    const availableOpponents = population.filter(g => g !== genome);
+    const availableOpponents = population.filter(m => m !== model);
 
     for (let i = 0; i < this.config.matchesPerEvaluation; i++) {
       // Sample N-1 opponents for this match
       const opponents = this.sampleOpponents(availableOpponents, this.playerCount - 1);
 
-      // Build player list: genome being evaluated is always player 0
-      const players = [genome, ...opponents];
+      // Build player list: model being evaluated is always player 0
+      const players = [model, ...opponents];
 
       // Play the match
       const result = await this.playMatch(players);
 
-      // Get score for player 0 (the genome being evaluated)
+      // Get score for player 0 (the model being evaluated)
       totalScore += result.scores[0];
       matchCount++;
     }
@@ -99,21 +99,21 @@ export class FitnessEvaluator {
   }
 
   /**
-   * Play a single match between multiple genomes
+   * Play a single match between multiple models
    *
-   * @param genomes Array of genomes, one per player
+   * @param models Array of models, one per player
    * @returns Match result with scores for all players
    */
-  async playMatch(genomes: NetworkType[]): Promise<MatchResult> {
+  async playMatch(models: tf.Sequential[]): Promise<MatchResult> {
     // Create simulator
     const simulator = new GameSimulator({
       ...this.config.simulatorConfig,
-      playerCount: genomes.length,
+      playerCount: models.length,
     });
 
     // Create AI controllers for each player
-    const ais = genomes.map((genome, i) =>
-      new NeuralAI(i, genome, this.config.encoderConfig)
+    const ais = models.map((model, i) =>
+      new NeuralAI(i, model, this.config.encoderConfig)
     );
 
     // Reset simulator
@@ -195,9 +195,9 @@ export class FitnessEvaluator {
   }
 
   /**
-   * Sample opponents from available genomes
+   * Sample opponents from available models
    */
-  private sampleOpponents(opponents: NetworkType[], count: number): NetworkType[] {
+  private sampleOpponents(opponents: tf.Sequential[], count: number): tf.Sequential[] {
     if (opponents.length <= count) {
       return opponents;
     }
@@ -213,18 +213,4 @@ export class FitnessEvaluator {
   getConfig(): EvaluatorConfig {
     return { ...this.config };
   }
-}
-
-/**
- * Quick evaluation function for use with NEATTrainer
- * Creates an evaluator and returns a fitness function
- */
-export function createFitnessFunction(
-  config: Partial<EvaluatorConfig> = {}
-): (genome: NetworkType, population: NetworkType[]) => Promise<number> {
-  const evaluator = new FitnessEvaluator(config);
-
-  return async (genome: NetworkType, population: NetworkType[]): Promise<number> => {
-    return evaluator.evaluateGenome(genome, population);
-  };
 }

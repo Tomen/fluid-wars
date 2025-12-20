@@ -11,8 +11,6 @@ import type {
   AIAction,
   RewardConfig,
 } from './AIInterface';
-import { PLAYER_CONFIG } from '../config';
-import { clamp } from '../utils';
 
 /**
  * Headless game simulator for AI training
@@ -120,23 +118,20 @@ export class GameSimulator {
   }
 
   /**
-   * Apply an AI action to a player (set cursor position directly)
+   * Apply an AI action to a player (move cursor towards target at speed limit)
    */
   private applyAIAction(player: Player, action: AIAction): void {
     // Convert normalized action to canvas coordinates
     const targetX = action.targetX * this.config.canvasWidth;
     const targetY = action.targetY * this.config.canvasHeight;
 
-    // Clamp to valid bounds
-    player.cursorX = clamp(
+    // Move cursor towards target at same speed as human players
+    player.moveCursorTowards(
       targetX,
-      PLAYER_CONFIG.cursorRadius,
-      this.config.canvasWidth - PLAYER_CONFIG.cursorRadius
-    );
-    player.cursorY = clamp(
       targetY,
-      PLAYER_CONFIG.cursorRadius,
-      this.config.canvasHeight - PLAYER_CONFIG.cursorRadius
+      this.config.fixedDt,
+      this.config.canvasWidth,
+      this.config.canvasHeight
     );
   }
 

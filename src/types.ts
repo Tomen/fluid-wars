@@ -55,3 +55,15 @@ export const PLAYER_COLORS: readonly string[] = [
   '#44ffff', // Cyan
   '#ff88aa', // Pink
 ] as const;
+
+// Player color names (for display)
+export const PLAYER_COLOR_NAMES: readonly string[] = [
+  'Blue',
+  'Red',
+  'Green',
+  'Yellow',
+  'Purple',
+  'Orange',
+  'Cyan',
+  'Pink',
+] as const;

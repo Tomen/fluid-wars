@@ -38,12 +38,19 @@ function syncModel(): void {
   try {
     const checkpoint = JSON.parse(fs.readFileSync(latestCheckpointPath, 'utf8'));
 
-    // Create model file with metadata
+    // Get best genome weights (population is sorted by fitness, best first)
+    const bestWeights = checkpoint.population?.[0];
+    if (!bestWeights) {
+      console.log('[sync-model] No population in checkpoint, skipping');
+      return;
+    }
+
+    // Create model file with metadata (new TensorFlow format)
     const modelFile = {
       generation: checkpoint.generation,
       bestFitness: checkpoint.bestFitness,
       averageFitness: checkpoint.averageFitness,
-      network: checkpoint.bestGenome,
+      weights: bestWeights,
     };
 
     // Ensure output directory exists

@@ -20,12 +20,12 @@ particle:
   friction: 0.98         # per frame - velocity decay (0.98 = 2% loss per frame)
 
   # Size
-  radius: 4              # pixels - visual size of particles
+  radius: 8              # pixels - visual size of particles
 
   # Collision and Repulsion
-  repulsionRadius: 16    # pixels - distance at which particles repel each other
+  repulsionRadius: 32    # pixels - distance at which particles repel each other
   repulsionStrength: 180 # force units - base repulsion force
-  enemyRepulsionMultiplier: 3.0  # multiplier - extra repulsion between enemy particles
+  enemyRepulsionMultiplier: 1.0  # multiplier - extra repulsion between enemy particles
 
   # Spawn
   spawnRadius: 150       # pixels - radius around player cursor where particles spawn
@@ -96,28 +96,45 @@ render:
   backgroundColor: '#0a0a0f'
 
 # =============================================================================
+# CNN ARCHITECTURE
+# =============================================================================
+cnn:
+  # Convolutional layers
+  conv1Filters: 16           # First conv layer filters
+  conv2Filters: 32           # Second conv layer filters
+  kernelSize: 3              # Convolution kernel size
+  denseUnits: 64             # Dense layer before output
+
+  # Input grid dimensions (must match ObservationEncoder)
+  gridRows: 16
+  gridCols: 20
+  channels: 5                # friendly, enemy, obstacles, friendlyVel, enemyVel
+
+# =============================================================================
 # TRAINING (used by npm run train)
 # =============================================================================
 training:
-  trainer:
-    populationSize: 10
-    elitism: 5
-    mutationRate: 0.3
-    mutationAmount: 1
-    maxGenerations: 500
-    checkpointInterval: 1    # Save every generation
-    verbose: true
+  # Genetic algorithm settings
+  populationSize: 10         # Number of networks in population (small for testing)
+  eliteCount: 2              # Top N kept unchanged each generation
+  mutationRate: 0.1          # Probability of mutating each weight
+  mutationStrength: 0.3      # Std dev of Gaussian noise for mutations
+  crossoverRate: 0.5         # Probability of crossover vs mutation-only
+  maxGenerations: 500
+  checkpointInterval: 5      # Save every N generations
+  verbose: true
 
-  evaluator:
-    matchesPerGenome: 1      # Matches per genome evaluation
-    maxGameSteps: 3600       # Steps per match (~17 seconds at 60 FPS)
-    stepsPerSecond: 60       # For calculating time bonus
+  # Evaluation settings
+  matchesPerGenome: 1        # Matches per genome evaluation (reduced for testing)
+  maxGameSteps: 600          # Steps per match (~10 seconds at 60 FPS, for testing)
+  stepsPerSecond: 60         # For calculating time bonus
 
+  # Simulator settings (for training matches)
   simulator:
     playerCount: 4
     particlesPerPlayer: 250
-    canvasWidth: 800
-    canvasHeight: 600
+    canvasWidth: 1200
+    canvasHeight: 800
 
   # Generations at which to save difficulty-tiered models
   difficultyTiers:

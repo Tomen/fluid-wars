@@ -1,23 +1,22 @@
-// NeuralAI - Neural network-based AI controller
+// NeuralAI - CNN-based AI controller using TensorFlow.js
 
-import neataptic from 'neataptic';
-import type { Network as NetworkType, NetworkJSON } from 'neataptic';
-const { Network } = neataptic;
+import * as tf from '@tensorflow/tfjs';
 import type { Game } from '../game';
 import type { AIAction } from '../core/AIInterface';
 import type { AIController } from './AIController';
 import { ObservationEncoder, EncoderConfig } from './ObservationEncoder';
+import { predict } from './CNNModel';
 
 /**
- * Neural network-based AI controller
+ * Neural network-based AI controller using CNN
  *
- * Uses a NEAT-evolved neural network to make decisions.
- * The network takes encoded game state as input and outputs
+ * Uses a TensorFlow.js CNN to make decisions.
+ * The network takes a 3D grid observation as input and outputs
  * a target cursor position.
  */
 export class NeuralAI implements AIController {
   readonly playerId: number;
-  private network: NetworkType;
+  private model: tf.Sequential;
   private encoder: ObservationEncoder;
   private name: string;
 
@@ -25,18 +24,18 @@ export class NeuralAI implements AIController {
    * Create a NeuralAI controller
    *
    * @param playerId The player ID this AI controls
-   * @param network The neural network to use for decisions
+   * @param model The TensorFlow.js CNN model to use for decisions
    * @param encoderConfig Configuration for the observation encoder
    * @param name Optional name for this AI instance
    */
   constructor(
     playerId: number,
-    network: NetworkType,
+    model: tf.Sequential,
     encoderConfig?: Partial<EncoderConfig>,
     name?: string
   ) {
     this.playerId = playerId;
-    this.network = network;
+    this.model = model;
     this.encoder = new ObservationEncoder(encoderConfig);
     this.name = name || 'NeuralAI';
   }
@@ -52,17 +51,13 @@ export class NeuralAI implements AIController {
    * @returns Action with normalized target position
    */
   getAction(game: Game): AIAction {
-    // Encode the game state from this player's perspective
-    const observation = this.encoder.encode(game, this.playerId);
+    // Encode the game state as 3D grid from this player's perspective
+    const observation = this.encoder.encode3D(game, this.playerId);
 
-    // Activate the neural network
-    const outputs = this.network.activate(observation);
+    // Run CNN prediction
+    const [targetX, targetY] = predict(this.model, observation);
 
-    // Network outputs are expected to be in [0, 1] range
-    // but may be outside due to activation functions, so clamp
-    const targetX = clamp(outputs[0], 0, 1);
-    const targetY = clamp(outputs[1], 0, 1);
-
+    // Output is already in [0, 1] range due to sigmoid activation
     return {
       targetX,
       targetY,
@@ -70,52 +65,24 @@ export class NeuralAI implements AIController {
   }
 
   /**
-   * Reset the network's internal state
+   * Reset - no-op for CNN (no internal state)
    */
   reset(): void {
-    this.network.clear();
+    // CNN has no recurrent state to reset
   }
 
   /**
-   * Get the underlying neural network
+   * Get the underlying TensorFlow model
    */
-  getNetwork(): NetworkType {
-    return this.network;
+  getModel(): tf.Sequential {
+    return this.model;
   }
 
   /**
-   * Set a new neural network
+   * Set a new TensorFlow model
    */
-  setNetwork(network: NetworkType): void {
-    this.network = network;
-  }
-
-  /**
-   * Export the network to JSON for saving
-   */
-  exportNetwork(): NetworkJSON {
-    return this.network.toJSON();
-  }
-
-  /**
-   * Create a NeuralAI from a saved network JSON
-   */
-  static fromJSON(
-    playerId: number,
-    json: NetworkJSON,
-    encoderConfig?: Partial<EncoderConfig>,
-    name?: string
-  ): NeuralAI {
-    const network = Network.fromJSON(json);
-    return new NeuralAI(playerId, network, encoderConfig, name);
-  }
-
-  /**
-   * Get the expected input size for the neural network
-   */
-  static getInputSize(encoderConfig?: Partial<EncoderConfig>): number {
-    const encoder = new ObservationEncoder(encoderConfig);
-    return encoder.getObservationSize();
+  setModel(model: tf.Sequential): void {
+    this.model = model;
   }
 
   /**
@@ -124,11 +91,4 @@ export class NeuralAI implements AIController {
   static getOutputSize(): number {
     return 2; // targetX, targetY
   }
-}
-
-/**
- * Clamp a value to a range
- */
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }
