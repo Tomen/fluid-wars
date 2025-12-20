@@ -2,6 +2,8 @@
 
 A particle-based territory control game where players compete to convert enemy particles using cursor-based attraction mechanics.
 
+**[Play Now](https://tomen.github.io/fluid-wars/)**
+
 ## Quick Start
 
 ```bash
