@@ -5,14 +5,20 @@ import type { Obstacle } from './obstacle';
 import type { Player } from './player';
 import { RENDER_CONFIG } from './config';
 
+// Height of the power distribution bar at the top
+export const POWER_BAR_HEIGHT = 40;
+
 export class Renderer {
   readonly ctx: CanvasRenderingContext2D;
   readonly width: number;
   readonly height: number;
+  /** The playable game area height (excludes power bar) */
+  readonly gameHeight: number;
 
   constructor(canvas: HTMLCanvasElement) {
     this.width = canvas.width;
     this.height = canvas.height;
+    this.gameHeight = canvas.height - POWER_BAR_HEIGHT;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -31,23 +37,32 @@ export class Renderer {
   }
 
   drawObstacles(obstacles: Obstacle[]): void {
+    this.ctx.save();
+    this.ctx.translate(0, POWER_BAR_HEIGHT);
     for (const obstacle of obstacles) {
       obstacle.draw(this.ctx);
     }
+    this.ctx.restore();
   }
 
   drawParticles(particles: Particle[], conversionProgressMap?: Map<Particle, number>, convertingColorMap?: Map<Particle, string>): void {
+    this.ctx.save();
+    this.ctx.translate(0, POWER_BAR_HEIGHT);
     for (const particle of particles) {
       const progress = conversionProgressMap?.get(particle);
       const convertingColor = convertingColorMap?.get(particle);
       particle.draw(this.ctx, progress, convertingColor);
     }
+    this.ctx.restore();
   }
 
   drawPlayers(players: Player[]): void {
+    this.ctx.save();
+    this.ctx.translate(0, POWER_BAR_HEIGHT);
     for (const player of players) {
       player.draw(this.ctx);
     }
+    this.ctx.restore();
   }
 
   drawDebugText(text: string, x: number = 10, y: number = 20): void {
@@ -58,5 +73,38 @@ export class Renderer {
 
   drawFPS(fps: number): void {
     this.drawDebugText(`FPS: ${fps.toFixed(1)}`, 10, 20);
+  }
+
+  /**
+   * Draw a power distribution bar at the top of the screen
+   * Each player's segment is proportional to their particle count
+   */
+  drawPowerBar(players: Player[], totalParticles: number): void {
+    if (totalParticles === 0) return;
+
+    const barHeight = 40;
+    const barY = 0;
+    const barWidth = this.width;
+
+    let xOffset = 0;
+
+    for (const player of players) {
+      const ratio = player.particleCount / totalParticles;
+      const segmentWidth = ratio * barWidth;
+
+      if (segmentWidth > 0) {
+        this.ctx.fillStyle = player.color;
+        this.ctx.fillRect(xOffset, barY, segmentWidth, barHeight);
+        xOffset += segmentWidth;
+      }
+    }
+
+    // Draw subtle border at bottom of bar
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, barHeight);
+    this.ctx.lineTo(barWidth, barHeight);
+    this.ctx.stroke();
   }
 }

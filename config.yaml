@@ -16,8 +16,8 @@ game:
 # =============================================================================
 particle:
   # Movement
-  acceleration: 100      # units/sec² - how fast particles accelerate toward cursor
-  maxVelocity: 150       # units/sec - maximum particle speed
+  acceleration: 150      # units/sec² - how fast particles accelerate toward cursor
+  maxVelocity: 300       # units/sec - maximum particle speed
   friction: 0.98         # per frame - velocity decay (0.98 = 2% loss per frame)
 
   # Size
@@ -26,7 +26,7 @@ particle:
   # Collision and Repulsion
   repulsionRadius: 24    # pixels - distance at which particles repel each other
   repulsionStrength: 2000 # force units - base repulsion force
-  enemyRepulsionMultiplier: 1.0  # multiplier - extra repulsion between enemy particles
+  enemyRepulsionMultiplier: 8.0  # multiplier - extra repulsion between enemy particles
 
   # Spawn
   spawnRadius: 150       # pixels - radius around player cursor where particles spawn
@@ -35,8 +35,8 @@ particle:
 # CONVERSION SYSTEM
 # =============================================================================
 conversion:
-  radius: 30             # pixels - distance at which conversion can occur
-  rate: 0.5              # progress/sec - how fast conversion builds up when outnumbered
+  radius: 60             # pixels - distance at which conversion can occur
+  rate: 2.0              # progress/sec - how fast conversion builds up when outnumbered
   threshold: 1.0         # progress required to convert
   decayMultiplier: 2     # decay rate multiplier when not being converted
 
@@ -120,24 +120,24 @@ cnn:
 # =============================================================================
 training:
   # Genetic algorithm settings
-  populationSize: 100         # Number of networks in population (small for testing)
-  eliteCount: 5              # Top N kept unchanged each generation
-  mutationRate: 0.1          # Probability of mutating each weight
-  mutationStrength: 0.3      # Std dev of Gaussian noise for mutations
-  crossoverRate: 0.5         # Probability of crossover vs mutation-only
-  maxGenerations: 500
-  checkpointInterval: 1      # Save every N generations
+  populationSize: 10          # Reasonable for CPU training
+  eliteCount: 2               # Top N kept unchanged each generation
+  mutationRate: 0.1           # Probability of mutating each weight
+  mutationStrength: 0.3       # Std dev of Gaussian noise for mutations
+  crossoverRate: 0.5          # Probability of crossover vs mutation-only
+  maxGenerations: 5000
+  checkpointInterval: 1       # Save every N generations
   verbose: true
 
   # Evaluation settings
-  matchesPerGenome: 1        # Matches per genome evaluation (reduced for testing)
-  maxGameSteps: 3600          # Steps per match (~10 seconds at 60 FPS, for testing)
-  stepsPerSecond: 60         # For calculating time bonus
+  matchesPerGenome: 1         # Matches per genome evaluation
+  maxGameSteps: 3600           # Steps per match (15 seconds at 60 FPS)
+  stepsPerSecond: 60          # For calculating time bonus
 
   # Simulator settings (for training matches)
   simulator:
     playerCount: 4
-    particlesPerPlayer: 250
+    particlesPerPlayer: 150   # Fewer particles = faster simulation
     canvasWidth: 1200
     canvasHeight: 800
 

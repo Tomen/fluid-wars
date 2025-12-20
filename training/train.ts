@@ -1,14 +1,12 @@
 // Training entry point for CNN AI evolution
 // Run with: npm run train
 
-// Try to use Node.js backend (faster), fall back to CPU if native bindings fail
-try {
-  await import('@tensorflow/tfjs-node');
-  console.log('Using TensorFlow.js Node.js backend');
-} catch (e) {
-  console.log('Native backend unavailable, using CPU backend');
-  await import('@tensorflow/tfjs');
-}
+// Setup environment (adds TensorFlow DLL to PATH on Windows)
+import './setup-env.js';
+
+// Import TensorFlow.js with native Node.js backend
+import * as tf from '@tensorflow/tfjs-node';
+console.log('Using TensorFlow.js backend:', tf.getBackend());
 
 import * as fs from 'fs';
 import * as path from 'path';

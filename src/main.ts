@@ -3,7 +3,7 @@
 import type { AppState, GameConfig } from './types';
 import { PLAYER_COLOR_NAMES } from './types';
 import { Game } from './game';
-import { Renderer } from './renderer';
+import { Renderer, POWER_BAR_HEIGHT } from './renderer';
 import { GAME_CONFIG, GAME_LOOP_CONFIG, AI_CONFIG } from './config';
 import { AggressiveAI, RandomAI } from './ai/AIController';
 import { NeuralAI } from './ai/NeuralAI';
@@ -48,7 +48,7 @@ class App {
       particlesPerPlayer: GAME_CONFIG.particlesPerPlayer
     };
 
-    this.game = new Game(config, this.renderer.width, this.renderer.height);
+    this.game = new Game(config, this.renderer.width, this.renderer.gameHeight);
 
     // Setup restart key listener
     window.addEventListener('keydown', (e) => {
@@ -157,6 +157,8 @@ class App {
           this.renderer.drawParticles(this.game.getParticles(), conversionProgress, convertingColors);
           // Draw player cursors on top
           this.renderer.drawPlayers(this.game.getPlayers());
+          // Draw power distribution bar
+          this.renderer.drawPowerBar(this.game.getPlayers(), this.game.getParticles().length);
 
           // Draw victory screen overlay if game over
           if (this.state === 'gameover') {
@@ -168,26 +170,14 @@ class App {
 
     // Draw debug info
     if (this.game) {
-      const players = this.game.getPlayers();
       const particleCount = this.game.getParticles().length;
       const obstacleCount = this.game.getObstacles().length;
       const spatialStats = this.game.getSpatialHashStats();
 
-      this.renderer.drawDebugText(`FPS: ${this.fps.toFixed(1)} | Particles: ${particleCount} | Obstacles: ${obstacleCount} | Grid Cells: ${spatialStats.cellCount}`, 10, 20);
+      const debugY = POWER_BAR_HEIGHT + 20;
+      this.renderer.drawDebugText(`FPS: ${this.fps.toFixed(1)} | Particles: ${particleCount} | Obstacles: ${obstacleCount} | Grid Cells: ${spatialStats.cellCount}`, 10, debugY);
 
-      // Show player info
-      for (let i = 0; i < players.length; i++) {
-        const player = players[i];
-        const colorName = PLAYER_COLOR_NAMES[i % PLAYER_COLOR_NAMES.length];
-        const controlType = player.isAI ? 'AI' : (i === 0 ? 'WASD' : 'Arrows');
-        this.renderer.drawDebugText(
-          `${colorName} (${controlType}): ${player.particleCount} particles`,
-          10,
-          40 + i * 20
-        );
-      }
-
-      // Show AI model info on dedicated line
+      // Show AI model info
       if (this.aiModelMetadata) {
         const gen = this.aiModelMetadata.generation !== null ? this.aiModelMetadata.generation : '?';
         const best = this.aiModelMetadata.bestFitness !== null ? this.aiModelMetadata.bestFitness.toFixed(1) : '?';
@@ -195,7 +185,7 @@ class App {
         this.renderer.drawDebugText(
           `AI Model: Gen ${gen} | Best: ${best} | Avg: ${avg}`,
           10,
-          40 + players.length * 20
+          debugY + 20
         );
       }
     }
@@ -256,7 +246,7 @@ class App {
       particlesPerPlayer: GAME_CONFIG.particlesPerPlayer
     };
 
-    this.game = new Game(config, this.renderer.width, this.renderer.height);
+    this.game = new Game(config, this.renderer.width, this.renderer.gameHeight);
 
     // Re-setup AI controllers
     if (AI_CONFIG.enabled) {
