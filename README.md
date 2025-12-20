@@ -27,6 +27,8 @@ Open http://localhost:5173 to play.
 
 Press **R** to restart after game over.
 
+Press **V** to toggle the AI observation overlay, which shows how each AI "sees" the game world as a 20x20 grid (green = friendly particles, red = enemies).
+
 ## Configuration
 
 All settings are in `config.yaml`:
@@ -75,4 +77,4 @@ training/
 - TypeScript
 - Vite
 - Canvas API
-- neataptic (NEAT neuroevolution)
+- TensorFlow.js (CNN + genetic algorithm for AI training)

@@ -131,9 +131,9 @@ export class Game {
       const width = minSize + Math.random() * (maxSize - minSize);
       const height = minSize + Math.random() * (maxSize - minSize);
 
-      // Random position within canvas bounds (with margin)
-      const x = margin + Math.random() * (this.canvasWidth - 2 * margin - width);
-      const y = margin + Math.random() * (this.canvasHeight - 2 * margin - height);
+      // Random position within canvas bounds (no margin - can spawn at edges)
+      const x = Math.random() * (this.canvasWidth - width);
+      const y = Math.random() * (this.canvasHeight - height);
 
       // Check if too close to any corner (player spawn areas)
       const corners = [

@@ -16,7 +16,7 @@ game:
 # =============================================================================
 particle:
   # Movement
-  acceleration: 150      # units/sec² - how fast particles accelerate toward cursor
+  acceleration: 200      # units/sec² - how fast particles accelerate toward cursor
   maxVelocity: 300       # units/sec - maximum particle speed
   friction: 0.98         # per frame - velocity decay (0.98 = 2% loss per frame)
 

@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "train:build": "tsc --project tsconfig.training.json",
     "train": "node --import tsx training/train.ts",
+    "train:stop": "echo. > training/checkpoints/STOP",
     "train:check": "tsc --project tsconfig.training.json --noEmit",
     "sync-model": "node --import tsx scripts/sync-model.ts"
   },

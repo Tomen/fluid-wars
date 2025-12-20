@@ -116,6 +116,9 @@ async function main(): Promise<void> {
     encoderConfig: {
       gridRows: CNN_CONFIG.gridRows,
       gridCols: CNN_CONFIG.gridCols,
+      // Must match simulator canvas dimensions
+      canvasWidth: TRAINING_CONFIG.simulator.canvasWidth,
+      canvasHeight: TRAINING_CONFIG.simulator.canvasHeight,
     },
   });
 
@@ -142,19 +145,53 @@ async function main(): Promise<void> {
   const startTime = Date.now();
   let running = true;
 
-  // Handle graceful shutdown
+  // Handle graceful shutdown via Ctrl+C
+  let ctrlCCount = 0;
   process.on('SIGINT', () => {
-    if (!running) {
+    ctrlCCount++;
+    if (ctrlCCount >= 2) {
       console.log('\nForce quitting...');
       process.exit(1);
     }
     running = false;
-    console.log('\nGracefully shutting down after current generation...');
+    console.log('\nStopping... Press Ctrl+C again to force quit immediately.');
+
+    // Force exit after 5 seconds if still running
+    setTimeout(() => {
+      console.log('\nTimeout - force exiting...');
+      process.exit(1);
+    }, 5000);
   });
+
+  // Stop file path - create this file to stop training
+  const stopFilePath = path.join(CHECKPOINT_DIR, 'STOP');
+
+  // Clean up any existing stop file
+  if (fs.existsSync(stopFilePath)) {
+    fs.unlinkSync(stopFilePath);
+  }
+
+  // Function to check for stop signal
+  const checkStopSignal = (): boolean => {
+    if (fs.existsSync(stopFilePath)) {
+      fs.unlinkSync(stopFilePath); // Clean up
+      return true;
+    }
+    return false;
+  };
+
+  console.log(`To stop training: create file "${stopFilePath}" or press Ctrl+C\n`);
 
   // Training loop
   const startGen = trainer.getGeneration();
   while (running && trainer.getGeneration() < TRAINING_CONFIG.maxGenerations) {
+    // Check for stop signal before each generation
+    if (checkStopSignal()) {
+      console.log('\nStop file detected. Stopping after current generation...');
+      running = false;
+      break;
+    }
+
     const gen = trainer.getGeneration();
     const progress = ((gen / TRAINING_CONFIG.maxGenerations) * 100).toFixed(1);
 

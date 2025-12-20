@@ -8,6 +8,7 @@ import { GAME_CONFIG, GAME_LOOP_CONFIG, AI_CONFIG } from './config';
 import { AggressiveAI, RandomAI } from './ai/AIController';
 import { NeuralAI } from './ai/NeuralAI';
 import { loadModelWithMetadata, isModelAvailable, clearModelCache } from './ai/ModelLoader';
+import { ObservationEncoder } from './ai/ObservationEncoder';
 import type { AIController } from './ai/AIController';
 import type { ModelMetadata } from './ai/ModelLoader';
 
@@ -26,6 +27,10 @@ class App {
 
   // AI metadata (for displaying generation info)
   private aiModelMetadata: ModelMetadata | null = null;
+
+  // AI observation overlay
+  private showObservationOverlay: boolean = false;
+  private observationEncoder: ObservationEncoder;
 
   constructor() {
     // Get canvas element
@@ -50,12 +55,22 @@ class App {
 
     this.game = new Game(config, this.renderer.width, this.renderer.gameHeight);
 
-    // Setup restart key listener
+    // Initialize observation encoder with actual canvas dimensions
+    this.observationEncoder = new ObservationEncoder({
+      canvasWidth: this.renderer.width,
+      canvasHeight: this.renderer.gameHeight
+    });
+
+    // Setup keyboard listeners
     window.addEventListener('keydown', (e) => {
       if (e.key === 'r' || e.key === 'R') {
         if (this.state === 'gameover') {
           this.restartGame();
         }
+      }
+      // Toggle AI observation overlay
+      if (e.key === 'v' || e.key === 'V') {
+        this.showObservationOverlay = !this.showObservationOverlay;
       }
     });
 
@@ -187,6 +202,26 @@ class App {
           10,
           debugY + 20
         );
+      }
+
+      // Draw AI observation overlay for each AI player
+      if (this.showObservationOverlay && AI_CONFIG.enabled && AI_CONFIG.aiPlayers.length > 0) {
+        const cellSize = 10;
+        const players = this.game.getPlayers();
+
+        for (let i = 0; i < AI_CONFIG.aiPlayers.length; i++) {
+          const playerId = AI_CONFIG.aiPlayers[i];
+          const player = players[playerId];
+          const observation = this.observationEncoder.encode3D(this.game, playerId);
+
+          // Position: stack vertically on the right side
+          const gridWidth = observation[0].length * cellSize;
+          const gridHeight = observation.length * cellSize;
+          const x = this.renderer.width - gridWidth - 10;
+          const y = POWER_BAR_HEIGHT + 60 + i * (gridHeight + 25);
+
+          this.renderer.drawObservationGrid(observation, x, y, cellSize, player?.color);
+        }
       }
     }
   }

@@ -107,4 +107,44 @@ export class Renderer {
     this.ctx.lineTo(barWidth, barHeight);
     this.ctx.stroke();
   }
+
+  /**
+   * Draw the AI observation grid overlay
+   * Green = friendly particles, Red = enemy particles, Blue = obstacles
+   */
+  drawObservationGrid(
+    observation: number[][][],
+    x: number,
+    y: number,
+    cellSize: number = 10,
+    playerColor?: string
+  ): void {
+    const rows = observation.length;
+    const cols = observation[0].length;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const friendly = observation[r][c][0];
+        const enemy = observation[r][c][1];
+        const obstacle = observation[r][c][2];
+
+        const red = Math.floor(enemy * 255);
+        const green = Math.floor(friendly * 255);
+        const blue = Math.floor(obstacle * 255);
+
+        this.ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+        this.ctx.fillRect(x + c * cellSize, y + r * cellSize, cellSize, cellSize);
+      }
+    }
+
+    // Border with player color
+    this.ctx.strokeStyle = playerColor || '#ffffff';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(x, y, cols * cellSize, rows * cellSize);
+
+    // Label with player color
+    this.ctx.fillStyle = playerColor || '#ffffff';
+    this.ctx.font = '12px monospace';
+    this.ctx.fillText('AI View', x, y - 5);
+  }
 }
