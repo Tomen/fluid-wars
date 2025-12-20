@@ -117,7 +117,7 @@ export class Game {
 
   private initObstacles(): void {
     // Create randomly positioned and sized obstacles
-    const { size, minSizeMultiplier, maxSizeMultiplier, minCount, maxCount, margin, playerMargin } = OBSTACLE_CONFIG;
+    const { size, minSizeMultiplier, maxSizeMultiplier, minCount, maxCount, playerMargin } = OBSTACLE_CONFIG;
 
     // Number of obstacles to generate
     const numObstacles = minCount + Math.floor(Math.random() * (maxCount - minCount + 1));

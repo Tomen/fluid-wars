@@ -37,14 +37,27 @@ interface ModelFileFormat {
 }
 
 /**
- * Model file paths for each difficulty
+ * Get the base URL for assets (handles GitHub Pages subdirectory deployment)
  */
-const MODEL_PATHS: Record<Exclude<AIDifficulty, 'random'>, string> = {
-  easy: '/models/ai_easy.json',
-  medium: '/models/ai_medium.json',
-  hard: '/models/ai_hard.json',
-  expert: '/models/ai_expert.json',
-};
+function getBaseUrl(): string {
+  // Vite injects BASE_URL from the `base` config option
+  // Falls back to '/' for environments without Vite
+  return import.meta.env?.BASE_URL ?? '/';
+}
+
+/**
+ * Model file paths for each difficulty (relative to base URL)
+ */
+function getModelPath(difficulty: Exclude<AIDifficulty, 'random'>): string {
+  const base = getBaseUrl();
+  const paths: Record<Exclude<AIDifficulty, 'random'>, string> = {
+    easy: 'models/ai_easy.json',
+    medium: 'models/ai_medium.json',
+    hard: 'models/ai_hard.json',
+    expert: 'models/ai_expert.json',
+  };
+  return `${base}${paths[difficulty]}`;
+}
 
 /**
  * Cache for loaded models (with metadata)
@@ -74,7 +87,7 @@ export async function loadModelWithMetadata(difficulty: Exclude<AIDifficulty, 'r
     return modelCache.get(difficulty)!;
   }
 
-  const path = MODEL_PATHS[difficulty];
+  const path = getModelPath(difficulty);
 
   try {
     const response = await fetch(path);
@@ -120,7 +133,7 @@ export async function isModelAvailable(difficulty: Exclude<AIDifficulty, 'random
   }
 
   try {
-    const response = await fetch(MODEL_PATHS[difficulty], { method: 'HEAD' });
+    const response = await fetch(getModelPath(difficulty), { method: 'HEAD' });
     return response.ok;
   } catch {
     return false;
