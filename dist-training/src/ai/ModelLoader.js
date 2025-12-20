@@ -1,14 +1,26 @@
 // ModelLoader - Load trained AI models in the browser
 import { createModel, setWeights, weightsFromJSON } from './CNNModel';
 /**
- * Model file paths for each difficulty
+ * Get the base URL for assets (handles GitHub Pages subdirectory deployment)
  */
-const MODEL_PATHS = {
-    easy: '/models/ai_easy.json',
-    medium: '/models/ai_medium.json',
-    hard: '/models/ai_hard.json',
-    expert: '/models/ai_expert.json',
-};
+function getBaseUrl() {
+    // Vite injects BASE_URL from the `base` config option
+    // Falls back to '/' for environments without Vite
+    return import.meta.env?.BASE_URL ?? '/';
+}
+/**
+ * Model file paths for each difficulty (relative to base URL)
+ */
+function getModelPath(difficulty) {
+    const base = getBaseUrl();
+    const paths = {
+        easy: 'models/ai_easy.json',
+        medium: 'models/ai_medium.json',
+        hard: 'models/ai_hard.json',
+        expert: 'models/ai_expert.json',
+    };
+    return `${base}${paths[difficulty]}`;
+}
 /**
  * Cache for loaded models (with metadata)
  */
@@ -34,7 +46,7 @@ export async function loadModelWithMetadata(difficulty) {
     if (modelCache.has(difficulty)) {
         return modelCache.get(difficulty);
     }
-    const path = MODEL_PATHS[difficulty];
+    const path = getModelPath(difficulty);
     try {
         const response = await fetch(path);
         if (!response.ok) {
@@ -72,7 +84,7 @@ export async function isModelAvailable(difficulty) {
         return true;
     }
     try {
-        const response = await fetch(MODEL_PATHS[difficulty], { method: 'HEAD' });
+        const response = await fetch(getModelPath(difficulty), { method: 'HEAD' });
         return response.ok;
     }
     catch {

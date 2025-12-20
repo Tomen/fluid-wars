@@ -34,14 +34,21 @@ interface YamlConfig {
     cellSize: number;
   };
   obstacle: {
+    generator: 'random' | 'grid';
+    playerMargin: number;
+    bounceEnergyLoss: number;
+    // Random generator settings
     size: number;
     minSizeMultiplier: number;
     maxSizeMultiplier: number;
     minCount: number;
     maxCount: number;
     margin: number;
-    playerMargin: number;
-    bounceEnergyLoss: number;
+    // Grid maze settings
+    gridSpacing: number;
+    wallThickness: number;
+    gapSize: number;
+    wallProbability: number;
   };
   gameLoop: {
     fixedDt: number;
@@ -178,14 +185,21 @@ export const SPATIAL_CONFIG = {
  * OBSTACLES / MAZE
  */
 export const OBSTACLE_CONFIG = {
+  generator: config.obstacle.generator,
+  playerMargin: config.obstacle.playerMargin,
+  bounceEnergyLoss: config.obstacle.bounceEnergyLoss,
+  // Random generator settings
   size: config.obstacle.size,
   minSizeMultiplier: config.obstacle.minSizeMultiplier,
   maxSizeMultiplier: config.obstacle.maxSizeMultiplier,
   minCount: config.obstacle.minCount,
   maxCount: config.obstacle.maxCount,
   margin: config.obstacle.margin,
-  playerMargin: config.obstacle.playerMargin,
-  bounceEnergyLoss: config.obstacle.bounceEnergyLoss,
+  // Grid maze settings
+  gridSpacing: config.obstacle.gridSpacing,
+  wallThickness: config.obstacle.wallThickness,
+  gapSize: config.obstacle.gapSize,
+  wallProbability: config.obstacle.wallProbability,
 } as const;
 
 /**

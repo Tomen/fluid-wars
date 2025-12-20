@@ -89,7 +89,7 @@ export class Renderer {
     }
     /**
      * Draw the AI observation grid overlay
-     * Green = friendly particles, Red = enemy particles, Yellow = mixed
+     * Green = friendly particles, Red = enemy particles, Blue = obstacles
      */
     drawObservationGrid(observation, x, y, cellSize = 10, playerColor) {
         const rows = observation.length;
@@ -98,9 +98,11 @@ export class Renderer {
             for (let c = 0; c < cols; c++) {
                 const friendly = observation[r][c][0];
                 const enemy = observation[r][c][1];
+                const obstacle = observation[r][c][2];
                 const red = Math.floor(enemy * 255);
                 const green = Math.floor(friendly * 255);
-                this.ctx.fillStyle = `rgb(${red}, ${green}, 0)`;
+                const blue = Math.floor(obstacle * 255);
+                this.ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
                 this.ctx.fillRect(x + c * cellSize, y + r * cellSize, cellSize, cellSize);
             }
         }

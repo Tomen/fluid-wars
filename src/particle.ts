@@ -26,9 +26,6 @@ export class Particle {
     // Apply soft repulsion from nearby particles
     this.applySoftRepulsion(nearbyParticles, dt);
 
-    // Apply friction
-    this.applyFriction();
-
     // Update position
     this.x += this.vx * dt;
     this.y += this.vy * dt;
@@ -37,6 +34,9 @@ export class Particle {
     for (const obstacle of obstacles) {
       obstacle.resolveParticleCollision(this);
     }
+
+    // Apply friction AFTER collision resolution (prevents compound energy loss)
+    this.applyFriction();
 
     // Keep particles within bounds
     this.x = clamp(this.x, this.radius, canvasWidth - this.radius);

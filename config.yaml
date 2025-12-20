@@ -35,7 +35,7 @@ particle:
 # CONVERSION SYSTEM
 # =============================================================================
 conversion:
-  radius: 60             # pixels - distance at which conversion can occur
+  radius: 45             # pixels - distance at which conversion can occur
   rate: 2.0              # progress/sec - how fast conversion builds up when outnumbered
   threshold: 1.0         # progress required to convert
   decayMultiplier: 2     # decay rate multiplier when not being converted
@@ -57,14 +57,23 @@ spatial:
 # OBSTACLES / MAZE
 # =============================================================================
 obstacle:
+  generator: 'grid'      # 'random' or 'grid' - which maze generator to use
+  playerMargin: 150      # pixels - keep obstacles away from player spawns
+  bounceEnergyLoss: 0.7  # multiplier - energy retained after bouncing (higher = less stuck on walls)
+
+  # Random generator settings
   size: 40               # pixels - base size for obstacles
   minSizeMultiplier: 0.5 # multiplier - minimum size (0.5 = 50% of base)
   maxSizeMultiplier: 3   # multiplier - maximum size (5 = 500% of base)
   minCount: 25           # minimum number of obstacles
   maxCount: 40           # maximum number of obstacles
   margin: 100            # pixels - margin from canvas edges
-  playerMargin: 200      # pixels - keep obstacles away from corners (player spawns)
-  bounceEnergyLoss: 0.5  # multiplier - energy retained after bouncing
+
+  # Grid maze settings
+  gridSpacing: 150       # pixels - distance between wall lines
+  wallThickness: 30      # pixels - thickness of walls
+  gapSize: 80            # pixels - size of gaps for passage
+  wallProbability: 0.7   # probability of wall at each grid position
 
 # =============================================================================
 # GAME LOOP
@@ -79,7 +88,7 @@ gameLoop:
 win:
   mode: percentage       # 'elimination' or 'percentage'
   eliminationThreshold: 0   # particles - opponent must have this many or fewer to lose
-  percentageThreshold: 0.9  # ratio - control this percentage to win (percentage mode)
+  percentageThreshold: 0.65 # ratio - control this percentage to win (percentage mode)
 
 # =============================================================================
 # AI CONFIGURATION
@@ -120,24 +129,24 @@ cnn:
 # =============================================================================
 training:
   # Genetic algorithm settings
-  populationSize: 10          # Reasonable for CPU training
-  eliteCount: 2               # Top N kept unchanged each generation
-  mutationRate: 0.1           # Probability of mutating each weight
-  mutationStrength: 0.3       # Std dev of Gaussian noise for mutations
-  crossoverRate: 0.5          # Probability of crossover vs mutation-only
+  populationSize: 20          # Increased for more diversity
+  eliteCount: 3               # Top N kept unchanged each generation
+  mutationRate: 0.15          # Probability of mutating each weight
+  mutationStrength: 0.25      # Std dev of Gaussian noise for mutations
+  crossoverRate: 0.6          # Probability of crossover vs mutation-only
   maxGenerations: 5000
-  checkpointInterval: 1       # Save every N generations
+  checkpointInterval: 10       # Save every N generations
   verbose: true
 
   # Evaluation settings
-  matchesPerGenome: 1         # Matches per genome evaluation
-  maxGameSteps: 3600           # Steps per match (15 seconds at 60 FPS)
+  matchesPerGenome: 3         # Matches per genome evaluation (reduces variance)
+  maxGameSteps: 2400          # Steps per match (40 seconds at 60 FPS)
   stepsPerSecond: 60          # For calculating time bonus
 
   # Simulator settings (for training matches)
   simulator:
     playerCount: 4
-    particlesPerPlayer: 150   # Fewer particles = faster simulation
+    particlesPerPlayer: 100   # Fewer particles = faster simulation
     canvasWidth: 1200
     canvasHeight: 800
 

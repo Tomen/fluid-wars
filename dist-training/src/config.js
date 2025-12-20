@@ -72,14 +72,21 @@ export const SPATIAL_CONFIG = {
  * OBSTACLES / MAZE
  */
 export const OBSTACLE_CONFIG = {
+    generator: config.obstacle.generator,
+    playerMargin: config.obstacle.playerMargin,
+    bounceEnergyLoss: config.obstacle.bounceEnergyLoss,
+    // Random generator settings
     size: config.obstacle.size,
     minSizeMultiplier: config.obstacle.minSizeMultiplier,
     maxSizeMultiplier: config.obstacle.maxSizeMultiplier,
     minCount: config.obstacle.minCount,
     maxCount: config.obstacle.maxCount,
     margin: config.obstacle.margin,
-    playerMargin: config.obstacle.playerMargin,
-    bounceEnergyLoss: config.obstacle.bounceEnergyLoss,
+    // Grid maze settings
+    gridSpacing: config.obstacle.gridSpacing,
+    wallThickness: config.obstacle.wallThickness,
+    gapSize: config.obstacle.gapSize,
+    wallProbability: config.obstacle.wallProbability,
 };
 /**
  * GAME LOOP

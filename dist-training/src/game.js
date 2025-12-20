@@ -1,12 +1,13 @@
 // Game class to coordinate all game systems
 import { Particle } from './particle';
-import { Obstacle } from './obstacle';
 import { Player } from './player';
 import { InputManager } from './input';
 import { SpatialHash } from './collision';
 import { ConversionSystem } from './conversion';
 import { PLAYER_COLORS } from './types';
 import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
+import { RandomGenerator } from './maze/RandomGenerator';
+import { GridMazeGenerator } from './maze/GridMazeGenerator';
 export class Game {
     players = [];
     particles = [];
@@ -90,48 +91,23 @@ export class Game {
         }
     }
     initObstacles() {
-        // Create randomly positioned and sized obstacles
-        const { size, minSizeMultiplier, maxSizeMultiplier, minCount, maxCount, margin, playerMargin } = OBSTACLE_CONFIG;
-        // Number of obstacles to generate
-        const numObstacles = minCount + Math.floor(Math.random() * (maxCount - minCount + 1));
-        // Size variation based on config multipliers
-        const minSize = size * minSizeMultiplier;
-        const maxSize = size * maxSizeMultiplier;
-        for (let i = 0; i < numObstacles; i++) {
-            // Random size (width and height can differ)
-            const width = minSize + Math.random() * (maxSize - minSize);
-            const height = minSize + Math.random() * (maxSize - minSize);
-            // Random position within canvas bounds (with margin)
-            const x = margin + Math.random() * (this.canvasWidth - 2 * margin - width);
-            const y = margin + Math.random() * (this.canvasHeight - 2 * margin - height);
-            // Check if too close to any corner (player spawn areas)
-            const corners = [
-                { x: 0, y: 0 },
-                { x: this.canvasWidth, y: 0 },
-                { x: 0, y: this.canvasHeight },
-                { x: this.canvasWidth, y: this.canvasHeight },
-            ];
-            const centerX = x + width / 2;
-            const centerY = y + height / 2;
-            let tooCloseToCorner = false;
-            for (const corner of corners) {
-                const dist = Math.sqrt((centerX - corner.x) ** 2 + (centerY - corner.y) ** 2);
-                if (dist < playerMargin) {
-                    tooCloseToCorner = true;
-                    break;
-                }
-            }
-            if (tooCloseToCorner) {
-                continue; // Skip this obstacle, don't block player spawns
-            }
-            this.obstacles.push(new Obstacle({
-                type: 'rect',
-                x,
-                y,
-                width,
-                height
-            }));
-        }
+        // Select generator based on config
+        const generator = OBSTACLE_CONFIG.generator === 'grid'
+            ? new GridMazeGenerator()
+            : new RandomGenerator();
+        // Get player spawn positions
+        const playerSpawns = this.getPlayerSpawns();
+        // Generate obstacles using the selected generator
+        this.obstacles = generator.generate(this.canvasWidth, this.canvasHeight, playerSpawns, OBSTACLE_CONFIG);
+    }
+    /**
+     * Get player spawn positions for maze generation
+     */
+    getPlayerSpawns() {
+        return this.players.map(player => ({
+            x: player.cursorX,
+            y: player.cursorY
+        }));
     }
     update(dt) {
         // Update players based on input (human) or AI controllers

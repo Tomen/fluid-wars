@@ -17,7 +17,7 @@ export const DEFAULT_ENCODER_CONFIG = {
  * The observation is a 3D grid with shape [gridRows][gridCols][channels]:
  * - Channel 0: friendly particle density (0-1)
  * - Channel 1: enemy particle density (all enemies combined, 0-1)
- * - Channel 2: obstacle presence (0 or 1)
+ * - Channel 2: obstacle coverage (0-1, fractional area)
  * - Channel 3: friendly particle velocity magnitude (0-1)
  * - Channel 4: enemy particle velocity magnitude (0-1)
  *
@@ -28,10 +28,114 @@ export class ObservationEncoder {
     config;
     cellWidth;
     cellHeight;
+    // Cached obstacle grid (fractional coverage, computed once per obstacle set)
+    cachedObstacleGrid = null;
+    cachedObstacles = null;
     constructor(config = {}) {
         this.config = { ...DEFAULT_ENCODER_CONFIG, ...config };
         this.cellWidth = this.config.canvasWidth / this.config.gridCols;
         this.cellHeight = this.config.canvasHeight / this.config.gridRows;
+    }
+    /**
+     * Get or compute the obstacle grid with fractional coverage.
+     * Cached since obstacles are static.
+     */
+    getObstacleGrid(obstacles) {
+        // Check if we need to recompute (different obstacle array reference)
+        if (this.cachedObstacleGrid === null || this.cachedObstacles !== obstacles) {
+            this.cachedObstacleGrid = this.computeObstacleGrid(obstacles);
+            this.cachedObstacles = obstacles;
+        }
+        return this.cachedObstacleGrid;
+    }
+    /**
+     * Compute obstacle grid with fractional coverage.
+     * Each cell contains the fraction of the cell area covered by obstacles (0-1).
+     */
+    computeObstacleGrid(obstacles) {
+        const { gridRows, gridCols } = this.config;
+        // Initialize grid with zeros
+        const grid = [];
+        for (let r = 0; r < gridRows; r++) {
+            grid[r] = new Array(gridCols).fill(0);
+        }
+        // Calculate fractional coverage for each obstacle
+        for (const obstacle of obstacles) {
+            this.addObstacleCoverage(grid, obstacle);
+        }
+        return grid;
+    }
+    /**
+     * Add fractional coverage for a single obstacle to the grid.
+     */
+    addObstacleCoverage(grid, obstacle) {
+        const { gridRows, gridCols } = this.config;
+        const data = obstacle.data || obstacle;
+        if (data.width !== undefined && data.height !== undefined) {
+            // Rectangle obstacle - calculate exact overlap
+            const obstacleLeft = data.x;
+            const obstacleRight = data.x + data.width;
+            const obstacleTop = data.y;
+            const obstacleBottom = data.y + data.height;
+            // Find cells that might overlap
+            const startCol = Math.max(0, Math.floor(obstacleLeft / this.cellWidth));
+            const endCol = Math.min(gridCols - 1, Math.floor(obstacleRight / this.cellWidth));
+            const startRow = Math.max(0, Math.floor(obstacleTop / this.cellHeight));
+            const endRow = Math.min(gridRows - 1, Math.floor(obstacleBottom / this.cellHeight));
+            const cellArea = this.cellWidth * this.cellHeight;
+            for (let r = startRow; r <= endRow; r++) {
+                for (let c = startCol; c <= endCol; c++) {
+                    // Cell bounds
+                    const cellLeft = c * this.cellWidth;
+                    const cellRight = cellLeft + this.cellWidth;
+                    const cellTop = r * this.cellHeight;
+                    const cellBottom = cellTop + this.cellHeight;
+                    // Calculate intersection
+                    const overlapLeft = Math.max(cellLeft, obstacleLeft);
+                    const overlapRight = Math.min(cellRight, obstacleRight);
+                    const overlapTop = Math.max(cellTop, obstacleTop);
+                    const overlapBottom = Math.min(cellBottom, obstacleBottom);
+                    const overlapWidth = Math.max(0, overlapRight - overlapLeft);
+                    const overlapHeight = Math.max(0, overlapBottom - overlapTop);
+                    const overlapArea = overlapWidth * overlapHeight;
+                    // Add fractional coverage (clamped to 1.0)
+                    grid[r][c] = Math.min(1, grid[r][c] + overlapArea / cellArea);
+                }
+            }
+        }
+        else if (data.radius !== undefined) {
+            // Circle obstacle - approximate with bounding box overlap
+            const obstacleLeft = data.x - data.radius;
+            const obstacleRight = data.x + data.radius;
+            const obstacleTop = data.y - data.radius;
+            const obstacleBottom = data.y + data.radius;
+            const startCol = Math.max(0, Math.floor(obstacleLeft / this.cellWidth));
+            const endCol = Math.min(gridCols - 1, Math.floor(obstacleRight / this.cellWidth));
+            const startRow = Math.max(0, Math.floor(obstacleTop / this.cellHeight));
+            const endRow = Math.min(gridRows - 1, Math.floor(obstacleBottom / this.cellHeight));
+            for (let r = startRow; r <= endRow; r++) {
+                for (let c = startCol; c <= endCol; c++) {
+                    // Sample points within the cell to estimate circle coverage
+                    const cellLeft = c * this.cellWidth;
+                    const cellTop = r * this.cellHeight;
+                    const samples = 4; // 4x4 grid of sample points
+                    let insideCount = 0;
+                    for (let sy = 0; sy < samples; sy++) {
+                        for (let sx = 0; sx < samples; sx++) {
+                            const px = cellLeft + (sx + 0.5) * this.cellWidth / samples;
+                            const py = cellTop + (sy + 0.5) * this.cellHeight / samples;
+                            const dx = px - data.x;
+                            const dy = py - data.y;
+                            if (dx * dx + dy * dy <= data.radius * data.radius) {
+                                insideCount++;
+                            }
+                        }
+                    }
+                    const coverage = insideCount / (samples * samples);
+                    grid[r][c] = Math.min(1, grid[r][c] + coverage);
+                }
+            }
+        }
     }
     /**
      * Build the spatial grid observation
@@ -78,6 +182,8 @@ export class ObservationEncoder {
                 }
             }
         }
+        // Get cached obstacle grid (fractional coverage)
+        const obstacleGrid = this.getObstacleGrid(obstacles);
         // Normalize particle counts and compute average velocities
         for (let r = 0; r < gridRows; r++) {
             for (let c = 0; c < gridCols; c++) {
@@ -86,6 +192,8 @@ export class ObservationEncoder {
                 // Normalize counts
                 grid[r][c][0] = Math.min(1, friendlyCount / maxDensity);
                 grid[r][c][1] = Math.min(1, enemyCount / maxDensity);
+                // Copy fractional obstacle coverage from cached grid
+                grid[r][c][2] = obstacleGrid[r][c];
                 // Compute average velocity magnitudes
                 if (friendlyCount > 0) {
                     grid[r][c][3] = Math.min(1, (velocitySum[r][c][0] / friendlyCount) / maxVelocity);
@@ -95,53 +203,7 @@ export class ObservationEncoder {
                 }
             }
         }
-        // Mark obstacle cells
-        for (const obstacle of obstacles) {
-            this.markObstacleInGrid(grid, obstacle);
-        }
         return grid;
-    }
-    /**
-     * Mark obstacle cells in the grid
-     */
-    markObstacleInGrid(grid, obstacle) {
-        const { gridRows, gridCols } = this.config;
-        // Handle different obstacle data structures
-        const data = obstacle.data || obstacle;
-        if (data.width !== undefined && data.height !== undefined) {
-            // Rectangle obstacle
-            const startCol = Math.floor(data.x / this.cellWidth);
-            const endCol = Math.floor((data.x + data.width) / this.cellWidth);
-            const startRow = Math.floor(data.y / this.cellHeight);
-            const endRow = Math.floor((data.y + data.height) / this.cellHeight);
-            for (let r = Math.max(0, startRow); r <= Math.min(gridRows - 1, endRow); r++) {
-                for (let c = Math.max(0, startCol); c <= Math.min(gridCols - 1, endCol); c++) {
-                    grid[r][c][2] = 1;
-                }
-            }
-        }
-        else if (data.radius !== undefined) {
-            // Circle obstacle
-            const centerCol = Math.floor(data.x / this.cellWidth);
-            const centerRow = Math.floor(data.y / this.cellHeight);
-            const radiusCells = Math.ceil(data.radius / Math.min(this.cellWidth, this.cellHeight));
-            for (let dr = -radiusCells; dr <= radiusCells; dr++) {
-                for (let dc = -radiusCells; dc <= radiusCells; dc++) {
-                    const r = centerRow + dr;
-                    const c = centerCol + dc;
-                    if (r >= 0 && r < gridRows && c >= 0 && c < gridCols) {
-                        // Check if cell center is within circle
-                        const cellCenterX = (c + 0.5) * this.cellWidth;
-                        const cellCenterY = (r + 0.5) * this.cellHeight;
-                        const dx = cellCenterX - data.x;
-                        const dy = cellCenterY - data.y;
-                        if (dx * dx + dy * dy <= data.radius * data.radius) {
-                            grid[r][c][2] = 1;
-                        }
-                    }
-                }
-            }
-        }
     }
     /**
      * Encode the game state as a 3D grid for CNN input

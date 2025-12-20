@@ -48,6 +48,7 @@ export interface MatchResult {
   winner: number; // -1 for draw/timeout, or player ID
   steps: number;
   finalParticleCounts: number[];
+  conversionsPerPlayer: number[]; // Total particles converted by each player
   scores: number[]; // Score for each player
 }
 
@@ -119,6 +120,11 @@ export class FitnessEvaluator {
     // Reset simulator
     simulator.reset();
 
+    // Track conversions per player
+    const conversions = new Array(models.length).fill(0);
+    let previousCounts = simulator.getGame().getPlayers().map(p => p.particleCount);
+    const startingParticles = previousCounts[0]; // All players start equal
+
     // Run the match
     let steps = 0;
     while (!simulator.isTerminal() && steps < this.config.maxStepsPerMatch) {
@@ -133,6 +139,16 @@ export class FitnessEvaluator {
       // Step the simulation
       simulator.step(actions);
       steps++;
+
+      // Track conversions (particles gained = conversions made)
+      const currentCounts = simulator.getGame().getPlayers().map(p => p.particleCount);
+      for (let i = 0; i < currentCounts.length; i++) {
+        const gained = currentCounts[i] - previousCounts[i];
+        if (gained > 0) {
+          conversions[i] += gained;
+        }
+      }
+      previousCounts = [...currentCounts];
     }
 
     // Get final state
@@ -144,7 +160,7 @@ export class FitnessEvaluator {
 
     // Calculate scores for all players
     const scores = players.map((_, i) =>
-      this.calculateScore(i, winner, steps, finalParticleCounts)
+      this.calculateScore(i, winner, steps, finalParticleCounts, conversions, startingParticles)
     );
 
     // Cleanup
@@ -154,6 +170,7 @@ export class FitnessEvaluator {
       winner,
       steps,
       finalParticleCounts,
+      conversionsPerPlayer: conversions,
       scores,
     };
   }
@@ -161,33 +178,56 @@ export class FitnessEvaluator {
   /**
    * Calculate the score for a player based on match outcome
    *
-   * Reward function:
-   * - Timeout: score = particle count
-   * - Early win: winner gets particles + remaining seconds
-   * - Early win: losers get particles - remaining seconds
+   * New aggression-focused reward function:
+   * 1. Base: particle share (0-100 points based on % of total)
+   * 2. Conversion bonus: +2 per particle converted (incentivizes attacking)
+   * 3. Dominance bonus: up to +50 for gaining particles overall
+   * 4. Win/timeout bonus: +100-200 for winning, +25 for leading at timeout
    */
   private calculateScore(
     playerId: number,
     winner: number,
     steps: number,
-    particleCounts: number[]
+    particleCounts: number[],
+    conversions: number[],
+    startingParticles: number
   ): number {
     const myParticles = particleCounts[playerId];
+    const myConversions = conversions[playerId];
+    const totalParticles = particleCounts.reduce((a, b) => a + b, 0);
 
-    // Base score: particle count
-    let score = myParticles;
+    // 1. Base score: particle share (0-100 points)
+    // In a 4-player game, equal share = 25 points
+    const particleShare = totalParticles > 0 ? myParticles / totalParticles : 0;
+    let score = particleShare * 100;
 
-    // If game ended early (someone won before timeout)
-    if (winner !== -1 && steps < this.config.maxStepsPerMatch) {
-      const remainingSteps = this.config.maxStepsPerMatch - steps;
-      const remainingSeconds = remainingSteps / this.config.stepsPerSecond;
+    // 2. Conversion bonus: +2 per particle converted (BIG incentive to attack)
+    score += myConversions * 2;
 
+    // 3. Dominance bonus: up to +50 for gaining particles
+    const netGain = myParticles - startingParticles;
+    if (netGain > 0) {
+      // Scale bonus based on how much they gained relative to starting amount
+      const gainRatio = Math.min(1, netGain / startingParticles);
+      score += 50 * gainRatio;
+    }
+
+    // 4. Win/Loss/Timeout bonus
+    if (winner !== -1) {
+      // Game ended with a winner
+      const remainingRatio = (this.config.maxStepsPerMatch - steps) / this.config.maxStepsPerMatch;
       if (winner === playerId) {
-        // Winner bonus: add remaining seconds
-        score += remainingSeconds;
+        // Winner: +100 base, up to +100 more for winning quickly
+        score += 100 + (remainingRatio * 100);
       } else {
-        // Loser malus: subtract remaining seconds
-        score -= remainingSeconds;
+        // Loser: -50 penalty
+        score -= 50;
+      }
+    } else {
+      // Timeout: bonus for being in the lead
+      const maxParticles = Math.max(...particleCounts);
+      if (myParticles === maxParticles && myParticles > startingParticles) {
+        score += 25;
       }
     }
 

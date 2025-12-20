@@ -23,6 +23,9 @@ export class GameSimulator {
   private stepCount: number = 0;
   private previousParticleCounts: number[] = [];
 
+  // Cached obstacle grid (fractional coverage, computed once per game)
+  private cachedObstacleGrid: number[][] | null = null;
+
   constructor(
     config: Partial<SimulatorConfig> = {},
     rewardConfig: Partial<RewardConfig> = {}
@@ -76,6 +79,9 @@ export class GameSimulator {
     this.game = this.createGame();
     this.stepCount = 0;
     this.initializePreviousCounts();
+
+    // Clear cached obstacle grid (new game may have different obstacles)
+    this.cachedObstacleGrid = null;
 
     return this.getState();
   }
@@ -241,32 +247,73 @@ export class GameSimulator {
       }
     }
 
-    // Mark obstacle cells
-    for (const obstacle of obstacles) {
-      // Get obstacle bounds (assuming rect obstacles)
-      const obstacleData = obstacle.data || obstacle;
-      if (obstacleData.type === 'rect' || obstacleData.width !== undefined) {
-        const startCol = Math.floor(obstacleData.x / cellWidth);
-        const endCol = Math.floor((obstacleData.x + obstacleData.width) / cellWidth);
-        const startRow = Math.floor(obstacleData.y / cellHeight);
-        const endRow = Math.floor((obstacleData.y + obstacleData.height) / cellHeight);
-
-        for (let r = Math.max(0, startRow); r <= Math.min(gridRows - 1, endRow); r++) {
-          for (let c = Math.max(0, startCol); c <= Math.min(gridCols - 1, endCol); c++) {
-            grid[r][c][2] = 1; // Obstacle present
-          }
-        }
-      }
+    // Get cached obstacle grid (fractional coverage)
+    if (this.cachedObstacleGrid === null) {
+      this.cachedObstacleGrid = this.computeObstacleGrid(obstacles, cellWidth, cellHeight);
     }
 
-    // Normalize particle counts (max expected density per cell)
+    // Normalize particle counts and copy obstacle coverage
     const maxDensity = 20; // Tune this based on game parameters
     for (let r = 0; r < gridRows; r++) {
       for (let c = 0; c < gridCols; c++) {
         grid[r][c][0] = Math.min(1, grid[r][c][0] / maxDensity);
         grid[r][c][1] = Math.min(1, grid[r][c][1] / maxDensity);
+        grid[r][c][2] = this.cachedObstacleGrid![r][c]; // Fractional obstacle coverage
         // Channels 3, 4 (conversion pressure) would need ConversionSystem access
         // For now, leave as 0 - can be added later
+      }
+    }
+
+    return grid;
+  }
+
+  /**
+   * Compute obstacle grid with fractional coverage.
+   */
+  private computeObstacleGrid(obstacles: any[], cellWidth: number, cellHeight: number): number[][] {
+    const { gridRows, gridCols } = this.config;
+    const cellArea = cellWidth * cellHeight;
+
+    // Initialize grid with zeros
+    const grid: number[][] = [];
+    for (let r = 0; r < gridRows; r++) {
+      grid[r] = new Array(gridCols).fill(0);
+    }
+
+    // Calculate fractional coverage for each obstacle
+    for (const obstacle of obstacles) {
+      const data = obstacle.data || obstacle;
+
+      if (data.width !== undefined && data.height !== undefined) {
+        const obstacleLeft = data.x;
+        const obstacleRight = data.x + data.width;
+        const obstacleTop = data.y;
+        const obstacleBottom = data.y + data.height;
+
+        const startCol = Math.max(0, Math.floor(obstacleLeft / cellWidth));
+        const endCol = Math.min(gridCols - 1, Math.floor(obstacleRight / cellWidth));
+        const startRow = Math.max(0, Math.floor(obstacleTop / cellHeight));
+        const endRow = Math.min(gridRows - 1, Math.floor(obstacleBottom / cellHeight));
+
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = startCol; c <= endCol; c++) {
+            const cellLeft = c * cellWidth;
+            const cellRight = cellLeft + cellWidth;
+            const cellTop = r * cellHeight;
+            const cellBottom = cellTop + cellHeight;
+
+            const overlapLeft = Math.max(cellLeft, obstacleLeft);
+            const overlapRight = Math.min(cellRight, obstacleRight);
+            const overlapTop = Math.max(cellTop, obstacleTop);
+            const overlapBottom = Math.min(cellBottom, obstacleBottom);
+
+            const overlapWidth = Math.max(0, overlapRight - overlapLeft);
+            const overlapHeight = Math.max(0, overlapBottom - overlapTop);
+            const overlapArea = overlapWidth * overlapHeight;
+
+            grid[r][c] = Math.min(1, grid[r][c] + overlapArea / cellArea);
+          }
+        }
       }
     }
 

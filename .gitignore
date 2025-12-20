@@ -25,3 +25,5 @@ Thumbs.db
 .claude/
 
 training/checkpoints/*
+
+dist-training/
