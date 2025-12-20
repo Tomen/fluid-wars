@@ -1,6 +1,6 @@
 // Game class to coordinate all game systems
 
-import type { GameConfig, Vec2 } from './types';
+import type { GameConfig, Vec2, WinConfig } from './types';
 import { Particle } from './particle';
 import { Obstacle } from './obstacle';
 import { Player } from './player';
@@ -33,12 +33,14 @@ export class Game {
   // Game state
   private winner: number = -1; // -1 = no winner, 0+ = player ID
   private readonly headless: boolean;
+  private readonly winConfig: WinConfig;
 
   // AI controllers (one per AI player)
   private aiControllers: Map<number, AIController> = new Map();
 
-  constructor(config: GameConfig, canvasWidth: number, canvasHeight: number, headless: boolean = false) {
+  constructor(config: GameConfig, canvasWidth: number, canvasHeight: number, headless: boolean = false, winConfig?: WinConfig) {
     this.headless = headless;
+    this.winConfig = winConfig || WIN_CONFIG;
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     this.input = new InputManager(headless);
@@ -255,10 +257,10 @@ export class Game {
   private checkWinCondition(): void {
     const totalParticles = this.particles.length;
 
-    if (WIN_CONFIG.mode === 'elimination') {
+    if (this.winConfig.mode === 'elimination') {
       // Elimination mode: player loses when they have <= threshold particles
       for (const player of this.players) {
-        if (player.particleCount <= WIN_CONFIG.eliminationThreshold) {
+        if (player.particleCount <= this.winConfig.eliminationThreshold) {
           // Find the winner (player with most particles remaining)
           let maxParticles = -1;
           for (const p of this.players) {
@@ -273,11 +275,11 @@ export class Game {
           break;
         }
       }
-    } else if (WIN_CONFIG.mode === 'percentage') {
+    } else if (this.winConfig.mode === 'percentage') {
       // Percentage mode: player wins when they control X% of all particles
       for (const player of this.players) {
         const percentage = player.particleCount / totalParticles;
-        if (percentage >= WIN_CONFIG.percentageThreshold) {
+        if (percentage >= this.winConfig.percentageThreshold) {
           this.winner = player.id;
           if (!this.headless) {
             console.log(`Player ${this.winner + 1} wins with ${(percentage * 100).toFixed(1)}% of particles!`);

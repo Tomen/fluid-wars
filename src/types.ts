@@ -16,6 +16,13 @@ export interface GameConfig {
   particlesPerPlayer: number;
 }
 
+// Win condition configuration
+export interface WinConfig {
+  mode: 'elimination' | 'percentage';
+  eliminationThreshold: number;
+  percentageThreshold: number;
+}
+
 // Obstacle types
 export type ObstacleType = 'rect' | 'circle';
 

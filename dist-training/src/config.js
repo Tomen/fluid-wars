@@ -56,6 +56,7 @@ export const CONVERSION_CONFIG = {
     rate: config.conversion.rate,
     threshold: config.conversion.threshold,
     decayMultiplier: config.conversion.decayMultiplier,
+    friendlySupportFactor: config.conversion.friendlySupportFactor,
 };
 /**
  * PLAYER CONTROLS
@@ -98,12 +99,12 @@ export const GAME_LOOP_CONFIG = {
     maxAccumulator: config.gameLoop.maxAccumulator,
 };
 /**
- * WIN CONDITION
+ * WIN CONDITION (for regular play)
  */
 export const WIN_CONFIG = {
-    mode: config.win.mode,
-    eliminationThreshold: config.win.eliminationThreshold,
-    percentageThreshold: config.win.percentageThreshold,
+    mode: config.game.win.mode,
+    eliminationThreshold: config.game.win.eliminationThreshold,
+    percentageThreshold: config.game.win.percentageThreshold,
 };
 /**
  * AI CONFIGURATION
@@ -113,6 +114,7 @@ export const AI_CONFIG = {
     aiPlayers: config.ai.aiPlayers,
     defaultAIType: config.ai.defaultAIType,
     neuralDifficulty: config.ai.neuralDifficulty,
+    useWebWorker: config.ai.useWebWorker,
 };
 /**
  * RENDERING
@@ -133,9 +135,10 @@ export const CNN_CONFIG = {
     channels: config.cnn.channels,
 };
 /**
- * TRAINING
+ * TRAINING (genetic algorithm and evaluation settings)
  */
 export const TRAINING_CONFIG = {
+    // Genetic algorithm
     populationSize: config.training.populationSize,
     eliteCount: config.training.eliteCount,
     mutationRate: config.training.mutationRate,
@@ -144,10 +147,50 @@ export const TRAINING_CONFIG = {
     maxGenerations: config.training.maxGenerations,
     checkpointInterval: config.training.checkpointInterval,
     verbose: config.training.verbose,
+    // Evaluation
     matchesPerGenome: config.training.matchesPerGenome,
     maxGameSteps: config.training.maxGameSteps,
     stepsPerSecond: config.training.stepsPerSecond,
-    simulator: config.training.simulator,
+    // Difficulty tiers
     difficultyTiers: config.training.difficultyTiers,
+};
+/**
+ * TRAINING GAME CONFIG (game settings merged with training overrides)
+ * Used by training simulator - inherits from game, applies overrides
+ */
+const trainingOverrides = config.training.overrides || {};
+export const TRAINING_GAME_CONFIG = {
+    // Base game settings with overrides applied
+    playerCount: trainingOverrides.playerCount ?? config.game.playerCount,
+    particlesPerPlayer: trainingOverrides.particlesPerPlayer ?? config.game.particlesPerPlayer,
+    canvasWidth: trainingOverrides.canvasWidth ?? config.game.canvasWidth,
+    canvasHeight: trainingOverrides.canvasHeight ?? config.game.canvasHeight,
+    // Win config: merge base game win with overrides
+    win: {
+        mode: trainingOverrides.win?.mode ?? config.game.win.mode,
+        eliminationThreshold: trainingOverrides.win?.eliminationThreshold ?? config.game.win.eliminationThreshold,
+        percentageThreshold: trainingOverrides.win?.percentageThreshold ?? config.game.win.percentageThreshold,
+    },
+};
+/**
+ * BALANCE RATIOS (computed from other configs)
+ * These dimensionless ratios determine gameplay dynamics.
+ * See docs/GAME_BALANCE.md for detailed explanations.
+ */
+export const BALANCE_RATIOS = {
+    /** repulsionRadius / conversionRadius - should be < 1 */
+    repulsionReach: PARTICLE_CONFIG.repulsionRadius / CONVERSION_CONFIG.radius,
+    /** 1 / friendlySupportFactor - attackers need this many more particles */
+    defenderAdvantage: 1 / CONVERSION_CONFIG.friendlySupportFactor,
+    /** threshold / rate - seconds to convert when outnumbered */
+    conversionTime: CONVERSION_CONFIG.threshold / CONVERSION_CONFIG.rate,
+    /** (conversionTime × maxVelocity) / conversionRadius - if > 1, escape is easy */
+    escapeRatio: (CONVERSION_CONFIG.threshold / CONVERSION_CONFIG.rate)
+        * PARTICLE_CONFIG.maxVelocity / CONVERSION_CONFIG.radius,
+    /** decayMultiplier - how much faster defenders recover than attackers build */
+    recoverySpeed: CONVERSION_CONFIG.decayMultiplier,
+    /** enemyRepulsionMultiplier × repulsionStrength / acceleration - higher = more spread */
+    enemyClusterDensity: PARTICLE_CONFIG.enemyRepulsionMultiplier
+        * PARTICLE_CONFIG.repulsionStrength / PARTICLE_CONFIG.acceleration,
 };
 //# sourceMappingURL=config.js.map

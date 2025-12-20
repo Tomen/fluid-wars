@@ -1,6 +1,6 @@
 // AI Interface types for game state observation and actions
 
-import type { Vec2 } from '../types';
+import type { Vec2, WinConfig } from '../types';
 
 /**
  * Normalized game state for AI observation
@@ -82,6 +82,9 @@ export interface SimulatorConfig {
 
   /** Grid columns for observation encoding */
   gridCols: number;
+
+  /** Win condition configuration (optional, uses game default if not specified) */
+  winConfig?: WinConfig;
 }
 
 /**

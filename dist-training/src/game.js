@@ -6,6 +6,7 @@ import { SpatialHash } from './collision';
 import { ConversionSystem } from './conversion';
 import { PLAYER_COLORS } from './types';
 import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
+import { AsyncNeuralAI } from './ai/AsyncNeuralAI';
 import { RandomGenerator } from './maze/RandomGenerator';
 import { GridMazeGenerator } from './maze/GridMazeGenerator';
 import { profiler } from './profiler';
@@ -24,10 +25,12 @@ export class Game {
     // Game state
     winner = -1; // -1 = no winner, 0+ = player ID
     headless;
+    winConfig;
     // AI controllers (one per AI player)
     aiControllers = new Map();
-    constructor(config, canvasWidth, canvasHeight, headless = false) {
+    constructor(config, canvasWidth, canvasHeight, headless = false, winConfig) {
         this.headless = headless;
+        this.winConfig = winConfig || WIN_CONFIG;
         this.canvasWidth = canvasWidth;
         this.canvasHeight = canvasHeight;
         this.input = new InputManager(headless);
@@ -200,10 +203,10 @@ export class Game {
     }
     checkWinCondition() {
         const totalParticles = this.particles.length;
-        if (WIN_CONFIG.mode === 'elimination') {
+        if (this.winConfig.mode === 'elimination') {
             // Elimination mode: player loses when they have <= threshold particles
             for (const player of this.players) {
-                if (player.particleCount <= WIN_CONFIG.eliminationThreshold) {
+                if (player.particleCount <= this.winConfig.eliminationThreshold) {
                     // Find the winner (player with most particles remaining)
                     let maxParticles = -1;
                     for (const p of this.players) {
@@ -219,11 +222,11 @@ export class Game {
                 }
             }
         }
-        else if (WIN_CONFIG.mode === 'percentage') {
+        else if (this.winConfig.mode === 'percentage') {
             // Percentage mode: player wins when they control X% of all particles
             for (const player of this.players) {
                 const percentage = player.particleCount / totalParticles;
-                if (percentage >= WIN_CONFIG.percentageThreshold) {
+                if (percentage >= this.winConfig.percentageThreshold) {
                     this.winner = player.id;
                     if (!this.headless) {
                         console.log(`Player ${this.winner + 1} wins with ${(percentage * 100).toFixed(1)}% of particles!`);
@@ -307,6 +310,22 @@ export class Game {
      */
     getCanvasSize() {
         return { width: this.canvasWidth, height: this.canvasHeight };
+    }
+    /**
+     * Get worker stats from all AsyncNeuralAI controllers
+     */
+    getWorkerStats() {
+        const stats = [];
+        for (const [playerId, controller] of this.aiControllers) {
+            if (controller instanceof AsyncNeuralAI) {
+                const workerStats = controller.getStats();
+                stats.push({
+                    playerId,
+                    ...workerStats,
+                });
+            }
+        }
+        return stats;
     }
 }
 //# sourceMappingURL=game.js.map

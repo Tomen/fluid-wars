@@ -107,14 +107,23 @@ export class Particle {
           : 0.2;                               // Separating: minimal repulsion
         strength *= approachFactor;
 
-        // Apply extra repulsion between enemy particles to create clash effect
-        if (other.owner !== this.owner) {
+        // Apply repulsion multiplier based on ownership
+        if (other.owner === this.owner) {
+          strength *= PARTICLE_CONFIG.friendlyRepulsionMultiplier;
+        } else {
           strength *= PARTICLE_CONFIG.enemyRepulsionMultiplier;
         }
 
         // Apply repulsion force
         this.vx += dir.x * strength * dt;
         this.vy += dir.y * strength * dt;
+
+        // Apply momentum loss when particles bounce (closer = more loss)
+        // This prevents infinite energy from repeated collisions
+        const closeness = 1 - dist / PARTICLE_CONFIG.repulsionRadius; // 0 at edge, 1 at center
+        const dampingFactor = 1 - closeness * PARTICLE_CONFIG.collisionDamping * dt;
+        this.vx *= dampingFactor;
+        this.vy *= dampingFactor;
       }
     }
   }

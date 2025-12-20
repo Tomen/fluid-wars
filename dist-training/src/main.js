@@ -5,6 +5,7 @@ import { Renderer, POWER_BAR_HEIGHT } from './renderer';
 import { GAME_CONFIG, GAME_LOOP_CONFIG, AI_CONFIG } from './config';
 import { AggressiveAI, RandomAI } from './ai/AIController';
 import { NeuralAI } from './ai/NeuralAI';
+import { AsyncNeuralAI } from './ai/AsyncNeuralAI';
 import { loadModelWithMetadata, isModelAvailable, clearModelCache } from './ai/ModelLoader';
 import { ObservationEncoder } from './ai/ObservationEncoder';
 import { profiler } from './profiler';
@@ -121,11 +122,21 @@ class App {
                     const modelAvailable = await isModelAvailable(AI_CONFIG.neuralDifficulty);
                     if (modelAvailable) {
                         const { model, metadata } = await loadModelWithMetadata(AI_CONFIG.neuralDifficulty);
-                        controller = new NeuralAI(playerId, model);
+                        // Use AsyncNeuralAI (Web Worker) if configured, otherwise blocking NeuralAI
+                        if (AI_CONFIG.useWebWorker) {
+                            const asyncAI = new AsyncNeuralAI(playerId, model);
+                            await asyncAI.waitForReady();
+                            controller = asyncAI;
+                            const genInfo = metadata.generation !== null ? ` gen ${metadata.generation}` : '';
+                            console.log(`Player ${playerId + 1}: AsyncNeuralAI (${AI_CONFIG.neuralDifficulty}${genInfo}, worker)`);
+                        }
+                        else {
+                            controller = new NeuralAI(playerId, model);
+                            const genInfo = metadata.generation !== null ? ` gen ${metadata.generation}` : '';
+                            console.log(`Player ${playerId + 1}: NeuralAI (${AI_CONFIG.neuralDifficulty}${genInfo})`);
+                        }
                         // Store metadata for UI display (only need to store once since all AI use same model)
                         this.aiModelMetadata = metadata;
-                        const genInfo = metadata.generation !== null ? ` gen ${metadata.generation}` : '';
-                        console.log(`Player ${playerId + 1}: Neural AI (${AI_CONFIG.neuralDifficulty}${genInfo})`);
                     }
                     else {
                         // Fall back to aggressive AI
@@ -242,6 +253,7 @@ class App {
             aiObservations,
             canvasWidth: this.renderer.width,
             canvasHeight: this.renderer.height,
+            workerStats: AI_CONFIG.useWebWorker ? this.game.getWorkerStats() : undefined,
         };
     }
     async restartGame() {
@@ -267,7 +279,7 @@ class App {
         console.log('Game restarted');
     }
     loop(timestamp) {
-        profiler.start('frame');
+        profiler.startFrame();
         // Calculate frame time
         const frameTime = (timestamp - this.lastTime) / 1000;
         this.lastTime = timestamp;
@@ -288,7 +300,7 @@ class App {
         }
         // Render
         this.render();
-        profiler.end('frame');
+        profiler.endFrame();
         // Continue loop
         requestAnimationFrame((time) => this.loop(time));
     }

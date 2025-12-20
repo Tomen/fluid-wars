@@ -22,7 +22,7 @@ async function bootstrap() {
     const geneticModule = await import('../src/training/GeneticTrainer');
     const GeneticTrainer = geneticModule.GeneticTrainer;
     const { getWeights, weightsToJSON } = await import('../src/ai/CNNModel');
-    const { TRAINING_CONFIG, DIFFICULTY_TIERS, MODEL_OUTPUT_DIR, CHECKPOINT_DIR, CNN_CONFIG, } = await import('./config');
+    const { TRAINING_CONFIG, TRAINING_GAME_CONFIG, DIFFICULTY_TIERS, MODEL_OUTPUT_DIR, CHECKPOINT_DIR, CNN_CONFIG, } = await import('./config');
     // Ensure output directories exist
     function ensureDirectories() {
         const dirs = [MODEL_OUTPUT_DIR, CHECKPOINT_DIR];
@@ -91,22 +91,28 @@ async function bootstrap() {
     // Ensure directories exist
     ensureDirectories();
     // Create trainer with evaluator config
+    // Uses TRAINING_GAME_CONFIG which merges base game settings with training overrides
     const trainer = new GeneticTrainer({
         matchesPerEvaluation: TRAINING_CONFIG.matchesPerGenome,
         maxStepsPerMatch: TRAINING_CONFIG.maxGameSteps,
         stepsPerSecond: TRAINING_CONFIG.stepsPerSecond,
         simulatorConfig: {
-            ...TRAINING_CONFIG.simulator,
+            playerCount: TRAINING_GAME_CONFIG.playerCount,
+            particlesPerPlayer: TRAINING_GAME_CONFIG.particlesPerPlayer,
+            canvasWidth: TRAINING_GAME_CONFIG.canvasWidth,
+            canvasHeight: TRAINING_GAME_CONFIG.canvasHeight,
             // Use CNN grid dimensions to ensure model input shape matches
             gridRows: CNN_CONFIG.gridRows,
             gridCols: CNN_CONFIG.gridCols,
+            // Use merged win config from TRAINING_GAME_CONFIG
+            winConfig: TRAINING_GAME_CONFIG.win,
         },
         encoderConfig: {
             gridRows: CNN_CONFIG.gridRows,
             gridCols: CNN_CONFIG.gridCols,
             // Must match simulator canvas dimensions
-            canvasWidth: TRAINING_CONFIG.simulator.canvasWidth,
-            canvasHeight: TRAINING_CONFIG.simulator.canvasHeight,
+            canvasWidth: TRAINING_GAME_CONFIG.canvasWidth,
+            canvasHeight: TRAINING_GAME_CONFIG.canvasHeight,
         },
     });
     // Check for existing checkpoint (skip for test configs)

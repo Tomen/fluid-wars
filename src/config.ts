@@ -3,12 +3,19 @@
 // Works in both browser (Vite) and Node.js (training)
 
 // Type definitions for the YAML config
+interface WinConfig {
+  mode: 'elimination' | 'percentage';
+  eliminationThreshold: number;
+  percentageThreshold: number;
+}
+
 interface YamlConfig {
   game: {
     playerCount: number;
     particlesPerPlayer: number;
     canvasWidth: number;
     canvasHeight: number;
+    win: WinConfig;
   };
   particle: {
     acceleration: number;
@@ -18,6 +25,8 @@ interface YamlConfig {
     repulsionRadius: number;
     repulsionStrength: number;
     enemyRepulsionMultiplier: number;
+    friendlyRepulsionMultiplier: number;
+    collisionDamping: number;
     spawnRadius: number;
   };
   conversion: {
@@ -25,6 +34,7 @@ interface YamlConfig {
     rate: number;
     threshold: number;
     decayMultiplier: number;
+    friendlySupportFactor: number;
   };
   player: {
     cursorSpeed: number;
@@ -54,11 +64,6 @@ interface YamlConfig {
     fixedDt: number;
     maxAccumulator: number;
   };
-  win: {
-    mode: 'elimination' | 'percentage';
-    eliminationThreshold: number;
-    percentageThreshold: number;
-  };
   ai: {
     enabled: boolean;
     aiPlayers: number[];
@@ -79,6 +84,7 @@ interface YamlConfig {
     channels: number;
   };
   training: {
+    // Genetic algorithm settings
     populationSize: number;
     eliteCount: number;
     mutationRate: number;
@@ -87,14 +93,17 @@ interface YamlConfig {
     maxGenerations: number;
     checkpointInterval: number;
     verbose: boolean;
+    // Evaluation settings
     matchesPerGenome: number;
     maxGameSteps: number;
     stepsPerSecond: number;
-    simulator: {
-      playerCount: number;
-      particlesPerPlayer: number;
-      canvasWidth: number;
-      canvasHeight: number;
+    // Game overrides (partial - inherits from game section)
+    overrides?: {
+      playerCount?: number;
+      particlesPerPlayer?: number;
+      canvasWidth?: number;
+      canvasHeight?: number;
+      win?: Partial<WinConfig>;
     };
     difficultyTiers: {
       easy: number;
@@ -154,6 +163,8 @@ export const PARTICLE_CONFIG = {
   repulsionRadius: config.particle.repulsionRadius,
   repulsionStrength: config.particle.repulsionStrength,
   enemyRepulsionMultiplier: config.particle.enemyRepulsionMultiplier,
+  friendlyRepulsionMultiplier: config.particle.friendlyRepulsionMultiplier,
+  collisionDamping: config.particle.collisionDamping,
 
   // Spawn
   spawnRadius: config.particle.spawnRadius,
@@ -167,6 +178,7 @@ export const CONVERSION_CONFIG = {
   rate: config.conversion.rate,
   threshold: config.conversion.threshold,
   decayMultiplier: config.conversion.decayMultiplier,
+  friendlySupportFactor: config.conversion.friendlySupportFactor,
 } as const;
 
 /**
@@ -214,12 +226,12 @@ export const GAME_LOOP_CONFIG = {
 } as const;
 
 /**
- * WIN CONDITION
+ * WIN CONDITION (for regular play)
  */
 export const WIN_CONFIG = {
-  mode: config.win.mode,
-  eliminationThreshold: config.win.eliminationThreshold,
-  percentageThreshold: config.win.percentageThreshold,
+  mode: config.game.win.mode,
+  eliminationThreshold: config.game.win.eliminationThreshold,
+  percentageThreshold: config.game.win.percentageThreshold,
 } as const;
 
 /**
@@ -254,9 +266,10 @@ export const CNN_CONFIG = {
 } as const;
 
 /**
- * TRAINING
+ * TRAINING (genetic algorithm and evaluation settings)
  */
 export const TRAINING_CONFIG = {
+  // Genetic algorithm
   populationSize: config.training.populationSize,
   eliteCount: config.training.eliteCount,
   mutationRate: config.training.mutationRate,
@@ -265,9 +278,56 @@ export const TRAINING_CONFIG = {
   maxGenerations: config.training.maxGenerations,
   checkpointInterval: config.training.checkpointInterval,
   verbose: config.training.verbose,
+  // Evaluation
   matchesPerGenome: config.training.matchesPerGenome,
   maxGameSteps: config.training.maxGameSteps,
   stepsPerSecond: config.training.stepsPerSecond,
-  simulator: config.training.simulator,
+  // Difficulty tiers
   difficultyTiers: config.training.difficultyTiers,
+} as const;
+
+/**
+ * TRAINING GAME CONFIG (game settings merged with training overrides)
+ * Used by training simulator - inherits from game, applies overrides
+ */
+const trainingOverrides = config.training.overrides || {};
+export const TRAINING_GAME_CONFIG = {
+  // Base game settings with overrides applied
+  playerCount: trainingOverrides.playerCount ?? config.game.playerCount,
+  particlesPerPlayer: trainingOverrides.particlesPerPlayer ?? config.game.particlesPerPlayer,
+  canvasWidth: trainingOverrides.canvasWidth ?? config.game.canvasWidth,
+  canvasHeight: trainingOverrides.canvasHeight ?? config.game.canvasHeight,
+  // Win config: merge base game win with overrides
+  win: {
+    mode: trainingOverrides.win?.mode ?? config.game.win.mode,
+    eliminationThreshold: trainingOverrides.win?.eliminationThreshold ?? config.game.win.eliminationThreshold,
+    percentageThreshold: trainingOverrides.win?.percentageThreshold ?? config.game.win.percentageThreshold,
+  },
+} as const;
+
+/**
+ * BALANCE RATIOS (computed from other configs)
+ * These dimensionless ratios determine gameplay dynamics.
+ * See docs/GAME_BALANCE.md for detailed explanations.
+ */
+export const BALANCE_RATIOS = {
+  /** repulsionRadius / conversionRadius - should be < 1 */
+  repulsionReach: PARTICLE_CONFIG.repulsionRadius / CONVERSION_CONFIG.radius,
+
+  /** 1 / friendlySupportFactor - attackers need this many more particles */
+  defenderAdvantage: 1 / CONVERSION_CONFIG.friendlySupportFactor,
+
+  /** threshold / rate - seconds to convert when outnumbered */
+  conversionTime: CONVERSION_CONFIG.threshold / CONVERSION_CONFIG.rate,
+
+  /** (conversionTime × maxVelocity) / conversionRadius - if > 1, escape is easy */
+  escapeRatio: (CONVERSION_CONFIG.threshold / CONVERSION_CONFIG.rate)
+               * PARTICLE_CONFIG.maxVelocity / CONVERSION_CONFIG.radius,
+
+  /** decayMultiplier - how much faster defenders recover than attackers build */
+  recoverySpeed: CONVERSION_CONFIG.decayMultiplier,
+
+  /** enemyRepulsionMultiplier × repulsionStrength / acceleration - higher = more spread */
+  enemyClusterDensity: PARTICLE_CONFIG.enemyRepulsionMultiplier
+                       * PARTICLE_CONFIG.repulsionStrength / PARTICLE_CONFIG.acceleration,
 } as const;

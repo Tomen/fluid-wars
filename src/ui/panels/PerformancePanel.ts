@@ -115,7 +115,8 @@ export class PerformancePanel extends UIPanel {
         workerRows += 2; // encode + predict
       }
     }
-    this.height = 85 + rowCount * 27 + workerRows * 27;
+    // Height: base (85) + main stats + worker rows + total line (30)
+    this.height = 85 + rowCount * 27 + workerRows * 27 + 30;
   }
 
   renderContent(ctx: CanvasRenderingContext2D): void {
@@ -165,20 +166,19 @@ export class PerformancePanel extends UIPanel {
       drawStatRecursive(stat, 0);
     }
 
-    // Total
+    // Total (main thread)
     y += 6;
     ctx.fillStyle = '#ffffff';
     ctx.font = '16px monospace';
     ctx.textBaseline = 'top';
     ctx.fillText(`Total: ${this.totalMs.toFixed(2)}ms`, this.contentX, y);
+    y += 24;
 
-    // Worker stats (if using Web Worker) - rendered like hierarchical stats
+    // Worker stats (if using Web Worker) - separate section for off-main-thread work
     if (this.workerStats) {
       const barHeight = 18;
       const isExpanded = this.expandedCategories.has('worker');
 
-      // Draw worker parent row
-      y += 6;
       const workerLabel = this.workerStats.workerCount > 1
         ? `worker (${this.workerStats.workerCount}x)`
         : 'worker';

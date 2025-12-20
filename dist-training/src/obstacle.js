@@ -8,6 +8,12 @@ export class Obstacle {
         this.type = data.type;
         this.data = data;
     }
+    /**
+     * Get the raw obstacle data for serialization
+     */
+    getData() {
+        return this.data;
+    }
     contains(x, y) {
         if (this.type === 'rect') {
             const rect = this.data;

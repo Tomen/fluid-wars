@@ -11,13 +11,21 @@ game:
   canvasWidth: 1600
   canvasHeight: 900
 
+  # Win condition for regular play
+  win:
+    mode: percentage       # 'elimination' or 'percentage'
+    eliminationThreshold: 0   # particles - opponent must have this many or fewer to lose
+    percentageThreshold: 0.85 # ratio - control this percentage to win (percentage mode)
+
 # =============================================================================
 # PARTICLE PHYSICS
+# See docs/GAME_BALANCE.md for how these interact with conversion parameters
 # =============================================================================
 particle:
   # Movement
   acceleration: 200      # units/sec² - how fast particles accelerate toward cursor
   maxVelocity: 300       # units/sec - maximum particle speed
+                         # BALANCE: affects escape ratio (maxVelocity × conversionTime / conversionRadius)
   friction: 0.98         # per frame - velocity decay (0.98 = 2% loss per frame)
 
   # Size
@@ -25,20 +33,35 @@ particle:
 
   # Collision and Repulsion
   repulsionRadius: 24    # pixels - distance at which particles repel each other
-  repulsionStrength: 2000 # force units - base repulsion force
+                         # BALANCE: should be < conversion.radius for conversion to work
+  repulsionStrength: 1000 # force units - base repulsion force
   enemyRepulsionMultiplier: 8.0  # multiplier - extra repulsion between enemy particles
+                         # BALANCE: higher = attackers spread more, harder to outnumber defenders
+                         # TIP: reduce to 4-5 if corner camping is too strong
+  friendlyRepulsionMultiplier: 4.0  # multiplier - repulsion between same-owner particles
+                         # BALANCE: higher = friendlies spread out more, less compression
+  collisionDamping: 1.0  # per second - velocity loss when particles collide (at point-blank)
+                         # BALANCE: higher = particles lose more energy on collision
 
   # Spawn
   spawnRadius: 150       # pixels - radius around player cursor where particles spawn
 
 # =============================================================================
 # CONVERSION SYSTEM
+# See docs/GAME_BALANCE.md for how these interact with particle parameters
 # =============================================================================
 conversion:
   radius: 45             # pixels - distance at which conversion can occur
+                         # BALANCE: should be > particle.repulsionRadius for conversion to work
   rate: 2.0              # progress/sec - how fast conversion builds up when outnumbered
+                         # BALANCE: conversionTime = threshold / rate (currently 0.5 sec)
   threshold: 1.0         # progress required to convert
   decayMultiplier: 2     # decay rate multiplier when not being converted
+                         # BALANCE: higher = defenders recover faster (currently 2x)
+  friendlySupportFactor: 0.7  # how much nearby friends help defend (1.0 = full, 0.5 = half)
+                         # BALANCE: defenderAdvantage = 1/factor (currently 1.43x)
+                         # Formula: conversion triggers when enemies > friends × factor
+                         # TIP: reduce to 0.5 if defense is too strong
 
 # =============================================================================
 # PLAYER CONTROLS
@@ -83,14 +106,6 @@ gameLoop:
   maxAccumulator: 0.1    # seconds - prevent spiral of death
 
 # =============================================================================
-# WIN CONDITION
-# =============================================================================
-win:
-  mode: percentage       # 'elimination' or 'percentage'
-  eliminationThreshold: 0   # particles - opponent must have this many or fewer to lose
-  percentageThreshold: 0.65 # ratio - control this percentage to win (percentage mode)
-
-# =============================================================================
 # AI CONFIGURATION
 # =============================================================================
 ai:
@@ -130,8 +145,8 @@ cnn:
 # TRAINING (used by npm run train)
 # =============================================================================
 training:
-  # Genetic algorithm settings
-  populationSize: 20          # Increased for more diversity
+  # --- Genetic algorithm settings ---
+  populationSize: 20          # Population size for evolution
   eliteCount: 3               # Top N kept unchanged each generation
   mutationRate: 0.15          # Probability of mutating each weight
   mutationStrength: 0.25      # Std dev of Gaussian noise for mutations
@@ -140,19 +155,24 @@ training:
   checkpointInterval: 1       # Save every N generations
   verbose: true
 
-  # Evaluation settings
+  # --- Evaluation settings ---
   matchesPerGenome: 3         # Matches per genome evaluation (reduces variance)
   maxGameSteps: 2400          # Steps per match (40 seconds at 60 FPS)
   stepsPerSecond: 60          # For calculating time bonus
 
-  # Simulator settings (for training matches)
-  simulator:
-    playerCount: 4
-    particlesPerPlayer: 100   # Fewer particles = faster simulation
+  # --- Game overrides (inherits from game section, override specific values) ---
+  # Only specify values you want to change from the base game config
+  overrides:
+    playerCount: 4              # Fewer players for faster training
+    particlesPerPlayer: 100     # Fewer particles for faster simulation
     canvasWidth: 1200
     canvasHeight: 800
+    win:
+      mode: percentage       # 'elimination' or 'percentage'
+      eliminationThreshold: 0   # particles - opponent must have this many or fewer to lose
+      percentageThreshold: 0.65 # ratio - control this percentage to win (percentage mode)
 
-  # Generations at which to save difficulty-tiered models
+  # --- Difficulty tiers (generations at which to save tiered models) ---
   difficultyTiers:
     easy: 25
     medium: 100

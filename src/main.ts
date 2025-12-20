@@ -41,7 +41,7 @@ class App {
   private aiModelMetadata: ModelMetadata | null = null;
 
   // AI observation overlay
-  private showObservationOverlay: boolean = false;
+  private showDebugPanels: boolean = false;
   private observationEncoder: ObservationEncoder;
 
   // UI Manager
@@ -87,10 +87,13 @@ class App {
           this.restartGame();
         }
       }
-      // Toggle AI observation overlay
+      // Toggle all debug panels
       if (e.key === 'v' || e.key === 'V') {
-        this.showObservationOverlay = !this.showObservationOverlay;
-        this.ui.setPanelVisible('aiObservation', this.showObservationOverlay);
+        this.showDebugPanels = !this.showDebugPanels;
+        this.ui.setPanelVisible('performance', this.showDebugPanels);
+        this.ui.setPanelVisible('gameInfo', this.showDebugPanels);
+        this.ui.setPanelVisible('aiInfo', this.showDebugPanels);
+        this.ui.setPanelVisible('aiObservation', this.showDebugPanels);
       }
     });
 
@@ -113,18 +116,24 @@ class App {
     // Power bar at top (render first, behind everything)
     this.ui.addPanel('powerBar', new PowerBarPanel(this.renderer.width));
 
-    // Left column panels (will stack dynamically)
-    this.ui.addPanel('performance', new PerformancePanel(10, POWER_BAR_HEIGHT + 10));
+    // Left column panels (will stack dynamically) - hidden by default, toggle with 'v'
+    const perfPanel = new PerformancePanel(10, POWER_BAR_HEIGHT + 10);
+    perfPanel.setVisible(false);
+    this.ui.addPanel('performance', perfPanel);
     this.ui.addToLeftColumn('performance');
 
-    this.ui.addPanel('gameInfo', new GameInfoPanel(10, 0)); // Y will be set by layout
+    const gameInfoPanel = new GameInfoPanel(10, 0);
+    gameInfoPanel.setVisible(false);
+    this.ui.addPanel('gameInfo', gameInfoPanel);
     this.ui.addToLeftColumn('gameInfo');
 
-    this.ui.addPanel('aiInfo', new AIInfoPanel(10, 0)); // Y will be set by layout
+    const aiInfoPanel = new AIInfoPanel(10, 0);
+    aiInfoPanel.setVisible(false);
+    this.ui.addPanel('aiInfo', aiInfoPanel);
     this.ui.addToLeftColumn('aiInfo');
 
     // Right column panels
-    const aiObsPanel = new AIObservationPanel(0, 0); // Position will be set by layout
+    const aiObsPanel = new AIObservationPanel(0, 0);
     aiObsPanel.setVisible(false);
     this.ui.addPanel('aiObservation', aiObsPanel);
     this.ui.addToRightColumn('aiObservation');
@@ -261,14 +270,16 @@ class App {
     const spatialStats = this.game.getSpatialHashStats();
     const winner = this.game.getWinnerPlayer();
 
-    // Build AI observations if overlay is visible
+    // Build AI observations if debug panels are visible (only for non-eliminated players)
     let aiObservations: UIData['aiObservations'] = undefined;
-    if (this.showObservationOverlay && AI_CONFIG.enabled) {
-      aiObservations = AI_CONFIG.aiPlayers.map(playerId => ({
-        playerId,
-        playerColor: players[playerId]?.color || '#ffffff',
-        observation: this.observationEncoder.encode3D(this.game!, playerId),
-      }));
+    if (this.showDebugPanels && AI_CONFIG.enabled) {
+      aiObservations = AI_CONFIG.aiPlayers
+        .filter(playerId => players[playerId]?.particleCount > 0)
+        .map(playerId => ({
+          playerId,
+          playerColor: players[playerId]?.color || '#ffffff',
+          observation: this.observationEncoder.encode3D(this.game!, playerId),
+        }));
     }
 
     return {

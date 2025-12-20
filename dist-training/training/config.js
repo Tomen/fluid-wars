@@ -1,6 +1,6 @@
 // Training configuration
 // Uses settings from config.yaml via the centralized config module
-import { TRAINING_CONFIG, CNN_CONFIG } from '../src/config';
+import { TRAINING_CONFIG, TRAINING_GAME_CONFIG, CNN_CONFIG } from '../src/config';
 /**
  * Difficulty tier checkpoints
  * Save models at these generations for different difficulty levels
@@ -20,5 +20,5 @@ export const MODEL_OUTPUT_DIR = './public/models';
  */
 export const CHECKPOINT_DIR = './training/checkpoints';
 // Re-export config for convenience
-export { TRAINING_CONFIG, CNN_CONFIG };
+export { TRAINING_CONFIG, TRAINING_GAME_CONFIG, CNN_CONFIG };
 //# sourceMappingURL=config.js.map

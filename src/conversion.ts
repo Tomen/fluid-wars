@@ -41,8 +41,8 @@ export class ConversionSystem {
       return false;
     }
 
-    // If outnumbered, build up conversion progress
-    if (enemyCount > friendlyCount) {
+    // If outnumbered (with friendlySupportFactor reducing defender effectiveness), build up conversion progress
+    if (enemyCount > friendlyCount * CONVERSION_CONFIG.friendlySupportFactor) {
       const currentProgress = this.conversionProgress.get(particle) || 0;
       const newProgress = currentProgress + CONVERSION_CONFIG.rate * dt;
 

@@ -15,6 +15,8 @@ particle:
   repulsionRadius: 24
   repulsionStrength: 2000
   enemyRepulsionMultiplier: 8.0
+  friendlyRepulsionMultiplier: 2.0
+  collisionDamping: 6.0
   spawnRadius: 150
 
 conversion:
@@ -22,6 +24,7 @@ conversion:
   rate: 2.0
   threshold: 1.0
   decayMultiplier: 2
+  friendlySupportFactor: 0.7
 
 player:
   cursorSpeed: 300

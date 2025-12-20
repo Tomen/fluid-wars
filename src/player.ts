@@ -59,6 +59,11 @@ export class Player {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
+    // Don't draw cursor for eliminated players
+    if (this.particleCount <= 0) {
+      return;
+    }
+
     const r = PLAYER_CONFIG.cursorRadius;
 
     // Draw cursor as a circle with color

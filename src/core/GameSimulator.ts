@@ -40,6 +40,7 @@ export class GameSimulator {
       maxSteps: config.maxSteps ?? 3600,
       gridRows: config.gridRows ?? 16,
       gridCols: config.gridCols ?? 20,
+      winConfig: config.winConfig,
     };
 
     this.rewardConfig = {
@@ -60,8 +61,8 @@ export class GameSimulator {
       particlesPerPlayer: this.config.particlesPerPlayer,
     };
 
-    // Pass headless=true to avoid browser dependencies
-    return new Game(gameConfig, this.config.canvasWidth, this.config.canvasHeight, true);
+    // Pass headless=true to avoid browser dependencies, and optional winConfig
+    return new Game(gameConfig, this.config.canvasWidth, this.config.canvasHeight, true, this.config.winConfig);
   }
 
   private initializePreviousCounts(): void {
