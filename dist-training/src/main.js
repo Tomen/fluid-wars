@@ -7,6 +7,8 @@ import { AggressiveAI, RandomAI } from './ai/AIController';
 import { NeuralAI } from './ai/NeuralAI';
 import { loadModelWithMetadata, isModelAvailable, clearModelCache } from './ai/ModelLoader';
 import { ObservationEncoder } from './ai/ObservationEncoder';
+import { profiler } from './profiler';
+import { UIManager, PerformancePanel, GameInfoPanel, PowerBarPanel, AIInfoPanel, AIObservationPanel, VictoryPanel, } from './ui';
 class App {
     state = 'playing'; // Start in playing state for now
     canvas;
@@ -23,6 +25,8 @@ class App {
     // AI observation overlay
     showObservationOverlay = false;
     observationEncoder;
+    // UI Manager
+    ui;
     constructor() {
         // Get canvas element
         this.canvas = document.getElementById('game-canvas');
@@ -46,6 +50,9 @@ class App {
             canvasWidth: this.renderer.width,
             canvasHeight: this.renderer.gameHeight
         });
+        // Initialize UI Manager
+        this.ui = new UIManager();
+        this.setupUI();
         // Setup keyboard listeners
         window.addEventListener('keydown', (e) => {
             if (e.key === 'r' || e.key === 'R') {
@@ -56,10 +63,38 @@ class App {
             // Toggle AI observation overlay
             if (e.key === 'v' || e.key === 'V') {
                 this.showObservationOverlay = !this.showObservationOverlay;
+                this.ui.setPanelVisible('aiObservation', this.showObservationOverlay);
             }
+        });
+        // Setup mouse click listener for UI panels
+        this.canvas.addEventListener('click', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            this.ui.handleClick(x, y);
         });
         console.log('Fluid Wars initialized');
         console.log(`Canvas size: ${this.renderer.width}x${this.renderer.height}`);
+    }
+    setupUI() {
+        // Configure responsive column layout
+        this.ui.setColumnLayout(POWER_BAR_HEIGHT + 10, 10);
+        // Power bar at top (render first, behind everything)
+        this.ui.addPanel('powerBar', new PowerBarPanel(this.renderer.width));
+        // Left column panels (will stack dynamically)
+        this.ui.addPanel('performance', new PerformancePanel(10, POWER_BAR_HEIGHT + 10));
+        this.ui.addToLeftColumn('performance');
+        this.ui.addPanel('gameInfo', new GameInfoPanel(10, 0)); // Y will be set by layout
+        this.ui.addToLeftColumn('gameInfo');
+        this.ui.addPanel('aiInfo', new AIInfoPanel(10, 0)); // Y will be set by layout
+        this.ui.addToLeftColumn('aiInfo');
+        // Right column panels
+        const aiObsPanel = new AIObservationPanel(0, 0); // Position will be set by layout
+        aiObsPanel.setVisible(false);
+        this.ui.addPanel('aiObservation', aiObsPanel);
+        this.ui.addToRightColumn('aiObservation');
+        // Victory panel (overlay, hidden by default) - not in a column
+        this.ui.addPanel('victory', new VictoryPanel(this.renderer.width, this.renderer.height));
     }
     async init() {
         // Setup AI controllers if enabled
@@ -134,6 +169,7 @@ class App {
     }
     render() {
         // Clear and draw background
+        profiler.start('render');
         this.renderer.drawBackground();
         // Render based on state
         switch (this.state) {
@@ -148,78 +184,65 @@ class App {
                     this.renderer.drawParticles(this.game.getParticles(), conversionProgress, convertingColors);
                     // Draw player cursors on top
                     this.renderer.drawPlayers(this.game.getPlayers());
-                    // Draw power distribution bar
-                    this.renderer.drawPowerBar(this.game.getPlayers(), this.game.getParticles().length);
-                    // Draw victory screen overlay if game over
-                    if (this.state === 'gameover') {
-                        this.renderVictoryScreen();
-                    }
                 }
                 break;
         }
-        // Draw debug info
+        profiler.end('render');
+        // Update and render UI
         if (this.game) {
-            const particleCount = this.game.getParticles().length;
-            const obstacleCount = this.game.getObstacles().length;
-            const spatialStats = this.game.getSpatialHashStats();
-            const debugY = POWER_BAR_HEIGHT + 20;
-            this.renderer.drawDebugText(`FPS: ${this.fps.toFixed(1)} | Particles: ${particleCount} | Obstacles: ${obstacleCount} | Grid Cells: ${spatialStats.cellCount}`, 10, debugY);
-            // Show AI model info
-            if (this.aiModelMetadata) {
-                const gen = this.aiModelMetadata.generation !== null ? this.aiModelMetadata.generation : '?';
-                const best = this.aiModelMetadata.bestFitness !== null ? this.aiModelMetadata.bestFitness.toFixed(1) : '?';
-                const avg = this.aiModelMetadata.averageFitness !== null ? this.aiModelMetadata.averageFitness.toFixed(1) : '?';
-                this.renderer.drawDebugText(`AI Model: Gen ${gen} | Best: ${best} | Avg: ${avg}`, 10, debugY + 20);
-            }
-            // Draw AI observation overlay for each AI player
-            if (this.showObservationOverlay && AI_CONFIG.enabled && AI_CONFIG.aiPlayers.length > 0) {
-                const cellSize = 10;
-                const players = this.game.getPlayers();
-                for (let i = 0; i < AI_CONFIG.aiPlayers.length; i++) {
-                    const playerId = AI_CONFIG.aiPlayers[i];
-                    const player = players[playerId];
-                    const observation = this.observationEncoder.encode3D(this.game, playerId);
-                    // Position: stack vertically on the right side
-                    const gridWidth = observation[0].length * cellSize;
-                    const gridHeight = observation.length * cellSize;
-                    const x = this.renderer.width - gridWidth - 10;
-                    const y = POWER_BAR_HEIGHT + 60 + i * (gridHeight + 25);
-                    this.renderer.drawObservationGrid(observation, x, y, cellSize, player?.color);
-                }
-            }
+            const uiData = this.buildUIData();
+            this.ui.update(uiData);
+            this.ui.layoutColumns(this.renderer.width); // Reposition panels based on heights
+            this.ui.render(this.renderer.ctx);
         }
     }
-    renderVictoryScreen() {
+    buildUIData() {
         if (!this.game)
-            return;
+            return {};
+        const particles = this.game.getParticles();
+        const players = this.game.getPlayers();
+        const spatialStats = this.game.getSpatialHashStats();
         const winner = this.game.getWinnerPlayer();
-        if (!winner)
-            return;
-        const ctx = this.renderer.ctx;
-        const centerX = this.renderer.width / 2;
-        const centerY = this.renderer.height / 2;
-        // Draw semi-transparent overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
-        // Draw victory message
-        ctx.fillStyle = winner.color;
-        ctx.font = 'bold 72px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('VICTORY!', centerX, centerY - 80);
-        // Draw player info
-        ctx.fillStyle = '#ffffff';
-        ctx.font = '36px sans-serif';
-        const colorName = PLAYER_COLOR_NAMES[winner.id % PLAYER_COLOR_NAMES.length];
-        const playerType = winner.isAI ? 'AI' : (winner.id === 0 ? 'WASD' : 'Arrows');
-        ctx.fillText(`${colorName} (${playerType}) Wins!`, centerX, centerY);
-        // Draw particle count
-        ctx.font = '24px sans-serif';
-        ctx.fillText(`${winner.particleCount} particles remaining`, centerX, centerY + 50);
-        // Draw restart instruction
-        ctx.fillStyle = '#aaaaaa';
-        ctx.font = '20px sans-serif';
-        ctx.fillText('Press R to restart', centerX, centerY + 120);
+        // Build AI observations if overlay is visible
+        let aiObservations = undefined;
+        if (this.showObservationOverlay && AI_CONFIG.enabled) {
+            aiObservations = AI_CONFIG.aiPlayers.map(playerId => ({
+                playerId,
+                playerColor: players[playerId]?.color || '#ffffff',
+                observation: this.observationEncoder.encode3D(this.game, playerId),
+            }));
+        }
+        return {
+            fps: this.fps,
+            particleCount: particles.length,
+            obstacleCount: this.game.getObstacles().length,
+            gridCells: spatialStats.cellCount,
+            profilerStats: profiler.getAllStats(),
+            hierarchicalStats: profiler.getHierarchicalStats(),
+            totalFrameMs: profiler.getTotalMs(),
+            aiModelInfo: this.aiModelMetadata ? {
+                generation: this.aiModelMetadata.generation,
+                bestFitness: this.aiModelMetadata.bestFitness,
+                averageFitness: this.aiModelMetadata.averageFitness,
+            } : undefined,
+            players: players.map(p => ({
+                id: p.id,
+                color: p.color,
+                particleCount: p.particleCount,
+                isAI: p.isAI,
+            })),
+            totalParticles: particles.length,
+            winner: winner ? {
+                id: winner.id,
+                color: winner.color,
+                particleCount: winner.particleCount,
+                isAI: winner.isAI,
+                colorName: PLAYER_COLOR_NAMES[winner.id % PLAYER_COLOR_NAMES.length],
+            } : null,
+            aiObservations,
+            canvasWidth: this.renderer.width,
+            canvasHeight: this.renderer.height,
+        };
     }
     async restartGame() {
         console.log('Restarting game...');
@@ -244,6 +267,7 @@ class App {
         console.log('Game restarted');
     }
     loop(timestamp) {
+        profiler.start('frame');
         // Calculate frame time
         const frameTime = (timestamp - this.lastTime) / 1000;
         this.lastTime = timestamp;
@@ -257,13 +281,14 @@ class App {
         }
         // Add to accumulator (clamped to prevent spiral of death)
         this.accumulator += Math.min(frameTime, GAME_LOOP_CONFIG.maxAccumulator);
-        // Fixed timestep updates
+        // Fixed timestep updates (may run multiple times per visual frame)
         while (this.accumulator >= GAME_LOOP_CONFIG.fixedDt) {
             this.update(GAME_LOOP_CONFIG.fixedDt);
             this.accumulator -= GAME_LOOP_CONFIG.fixedDt;
         }
         // Render
         this.render();
+        profiler.end('frame');
         // Continue loop
         requestAnimationFrame((time) => this.loop(time));
     }

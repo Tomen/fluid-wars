@@ -13,6 +13,13 @@ export class Obstacle {
     this.data = data;
   }
 
+  /**
+   * Get the raw obstacle data for serialization
+   */
+  getData(): ObstacleData {
+    return this.data;
+  }
+
   contains(x: number, y: number): boolean {
     if (this.type === 'rect') {
       const rect = this.data as RectObstacle;

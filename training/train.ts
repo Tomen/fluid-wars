@@ -1,99 +1,113 @@
 // Training entry point for CNN AI evolution
 // Run with: npm run train
+// Run with test config: npm run train -- config.test.yaml
 
-// Setup environment (adds TensorFlow DLL to PATH on Windows)
-import './setup-env.js';
+// Parse config path from command line BEFORE any imports (ESM hoists static imports)
+const configArg = process.argv[2];
+if (configArg) {
+  process.env.CONFIG_PATH = configArg;
+}
 
-// Import TensorFlow.js with native Node.js backend
-import * as tf from '@tensorflow/tfjs-node';
-console.log('Using TensorFlow.js backend:', tf.getBackend());
-
-import * as fs from 'fs';
-import * as path from 'path';
-import { GeneticTrainer, Checkpoint } from '../src/training/GeneticTrainer';
-import { getWeights, weightsToJSON } from '../src/ai/CNNModel';
-import {
-  TRAINING_CONFIG,
-  DIFFICULTY_TIERS,
-  MODEL_OUTPUT_DIR,
-  CHECKPOINT_DIR,
-  CNN_CONFIG,
-} from './config';
-
-// Ensure output directories exist
-function ensureDirectories(): void {
-  const dirs = [MODEL_OUTPUT_DIR, CHECKPOINT_DIR];
-  for (const dir of dirs) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`Created directory: ${dir}`);
-    }
+// Bootstrap function using dynamic imports to ensure CONFIG_PATH is set before config loads
+async function bootstrap() {
+  if (configArg) {
+    console.log(`Using config: ${configArg}`);
   }
-}
 
-// Save a checkpoint to disk
-function saveCheckpoint(checkpoint: Checkpoint): void {
-  const filename = path.join(CHECKPOINT_DIR, `checkpoint_gen_${checkpoint.generation}.json`);
-  fs.writeFileSync(filename, JSON.stringify(checkpoint, null, 2));
-  console.log(`Saved checkpoint: ${filename}`);
-}
+  // Setup environment (adds TensorFlow DLL to PATH on Windows)
+  await import('./setup-env.js');
 
-// Save the best model weights
-function saveBestModel(trainer: GeneticTrainer, generation: number, fitness: number, avgFitness: number): void {
-  const model = trainer.getBestModel();
-  const weights = getWeights(model);
+  // Dynamic imports after config path is set
+  const tf = await import('@tensorflow/tfjs-node');
+  console.log('Using TensorFlow.js backend:', tf.getBackend());
 
-  // Save to ai_easy.json (always updated with latest best)
-  const modelData = {
-    generation,
-    bestFitness: fitness,
-    averageFitness: avgFitness,
-    weights: weightsToJSON(weights),
-  };
+  const fs = await import('fs');
+  const path = await import('path');
+  const geneticModule = await import('../src/training/GeneticTrainer');
+  const GeneticTrainer = geneticModule.GeneticTrainer;
 
-  const latestPath = path.join(MODEL_OUTPUT_DIR, 'ai_easy.json');
-  fs.writeFileSync(latestPath, JSON.stringify(modelData, null, 2));
-  console.log(`Updated latest model: ${latestPath} (gen ${generation})`);
+  const { getWeights, weightsToJSON } = await import('../src/ai/CNNModel');
+  const {
+    TRAINING_CONFIG,
+    DIFFICULTY_TIERS,
+    MODEL_OUTPUT_DIR,
+    CHECKPOINT_DIR,
+    CNN_CONFIG,
+  } = await import('./config');
 
-  // Check difficulty tier saves
-  for (const [tier, config] of Object.entries(DIFFICULTY_TIERS)) {
-    if (tier !== 'easy' && generation === config.generation) {
-      const tierPath = path.join(MODEL_OUTPUT_DIR, config.filename);
-      fs.writeFileSync(tierPath, JSON.stringify(modelData, null, 2));
-      console.log(`Saved ${tier} difficulty model: ${tierPath}`);
+  // Ensure output directories exist
+  function ensureDirectories(): void {
+    const dirs = [MODEL_OUTPUT_DIR, CHECKPOINT_DIR];
+    for (const dir of dirs) {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+        console.log(`Created directory: ${dir}`);
+      }
     }
   }
 
-  model.dispose();
-}
-
-// Load the latest checkpoint if available
-function loadLatestCheckpoint(): Checkpoint | null {
-  if (!fs.existsSync(CHECKPOINT_DIR)) {
-    return null;
+  // Save a checkpoint to disk
+  function saveCheckpoint(checkpoint: import('../src/training/GeneticTrainer').Checkpoint): void {
+    const filename = path.join(CHECKPOINT_DIR, `checkpoint_gen_${checkpoint.generation}.json`);
+    fs.writeFileSync(filename, JSON.stringify(checkpoint, null, 2));
+    console.log(`Saved checkpoint: ${filename}`);
   }
 
-  const files = fs.readdirSync(CHECKPOINT_DIR)
-    .filter(f => f.startsWith('checkpoint_gen_') && f.endsWith('.json'))
-    .sort((a, b) => {
-      const genA = parseInt(a.match(/gen_(\d+)/)?.[1] || '0');
-      const genB = parseInt(b.match(/gen_(\d+)/)?.[1] || '0');
-      return genB - genA; // Descending order
-    });
+  // Save the best model weights
+  function saveBestModel(trainer: InstanceType<typeof GeneticTrainer>, generation: number, fitness: number, avgFitness: number): void {
+    const model = trainer.getBestModel();
+    const weights = getWeights(model);
 
-  if (files.length === 0) {
-    return null;
+    // Save to ai_easy.json (always updated with latest best)
+    const modelData = {
+      generation,
+      bestFitness: fitness,
+      averageFitness: avgFitness,
+      weights: weightsToJSON(weights),
+    };
+
+    const latestPath = path.join(MODEL_OUTPUT_DIR, 'ai_easy.json');
+    fs.writeFileSync(latestPath, JSON.stringify(modelData, null, 2));
+    console.log(`Updated latest model: ${latestPath} (gen ${generation})`);
+
+    // Check difficulty tier saves
+    for (const [tier, config] of Object.entries(DIFFICULTY_TIERS)) {
+      if (tier !== 'easy' && generation === config.generation) {
+        const tierPath = path.join(MODEL_OUTPUT_DIR, config.filename);
+        fs.writeFileSync(tierPath, JSON.stringify(modelData, null, 2));
+        console.log(`Saved ${tier} difficulty model: ${tierPath}`);
+      }
+    }
+
+    model.dispose();
   }
 
-  const latestFile = path.join(CHECKPOINT_DIR, files[0]);
-  console.log(`Loading checkpoint: ${latestFile}`);
+  // Load the latest checkpoint if available
+  function loadLatestCheckpoint(): import('../src/training/GeneticTrainer').Checkpoint | null {
+    if (!fs.existsSync(CHECKPOINT_DIR)) {
+      return null;
+    }
 
-  const data = fs.readFileSync(latestFile, 'utf-8');
-  return JSON.parse(data) as Checkpoint;
-}
+    const files = fs.readdirSync(CHECKPOINT_DIR)
+      .filter(f => f.startsWith('checkpoint_gen_') && f.endsWith('.json'))
+      .sort((a, b) => {
+        const genA = parseInt(a.match(/gen_(\d+)/)?.[1] || '0');
+        const genB = parseInt(b.match(/gen_(\d+)/)?.[1] || '0');
+        return genB - genA; // Descending order
+      });
 
-// Main training function
-async function main(): Promise<void> {
+    if (files.length === 0) {
+      return null;
+    }
+
+    const latestFile = path.join(CHECKPOINT_DIR, files[0]);
+    console.log(`Loading checkpoint: ${latestFile}`);
+
+    const data = fs.readFileSync(latestFile, 'utf-8');
+    return JSON.parse(data) as import('../src/training/GeneticTrainer').Checkpoint;
+  }
+
+  // Main training function
   console.log('='.repeat(60));
   console.log('Fluid Wars AI Training (CNN + Genetic Algorithm)');
   console.log('='.repeat(60));
@@ -122,8 +136,9 @@ async function main(): Promise<void> {
     },
   });
 
-  // Check for existing checkpoint
-  const checkpoint = loadLatestCheckpoint();
+  // Check for existing checkpoint (skip for test configs)
+  const isTestConfig = configArg && configArg.includes('test');
+  const checkpoint = isTestConfig ? null : loadLatestCheckpoint();
   if (checkpoint) {
     console.log(`Found checkpoint at generation ${checkpoint.generation}`);
     trainer.loadCheckpoint(checkpoint);
@@ -206,18 +221,36 @@ async function main(): Promise<void> {
       `Time=${(stats.elapsedTime / 1000).toFixed(1)}s`
     );
 
-    // Save checkpoint at interval
-    if ((stats.generation + 1) % TRAINING_CONFIG.checkpointInterval === 0) {
+    // Log per-genome stats for top performers
+    console.log('  Top genomes:');
+    for (const g of stats.topGenomes) {
+      const parentStr = g.parentIds.length === 0 ? 'init'
+        : g.parentIds.length === 1 ? g.parentIds[0]
+        : `${g.parentIds[0]}×${g.parentIds[1]}`;
+      console.log(
+        `    ${g.id} (${parentStr}): ` +
+        `fit=${g.fitness.toFixed(1)}, ` +
+        `target=(${g.avgTarget[0].toFixed(2)},${g.avgTarget[1].toFixed(2)}), ` +
+        `var=${g.avgVariance.toFixed(4)}, ` +
+        `conv=${g.totalConversions}, ` +
+        `wins=${g.wins}/${g.matches}`
+      );
+    }
+
+    // Save checkpoint at interval (skip for test configs)
+    if (!isTestConfig && (stats.generation + 1) % TRAINING_CONFIG.checkpointInterval === 0) {
       const cp = trainer.createCheckpoint();
       saveCheckpoint(cp);
       saveBestModel(trainer, cp.generation, cp.bestFitness, cp.averageFitness);
     }
   }
 
-  // Save final checkpoint
-  const finalCheckpoint = trainer.createCheckpoint();
-  saveCheckpoint(finalCheckpoint);
-  saveBestModel(trainer, finalCheckpoint.generation, finalCheckpoint.bestFitness, finalCheckpoint.averageFitness);
+  // Save final checkpoint (skip for test configs)
+  if (!isTestConfig) {
+    const finalCheckpoint = trainer.createCheckpoint();
+    saveCheckpoint(finalCheckpoint);
+    saveBestModel(trainer, finalCheckpoint.generation, finalCheckpoint.bestFitness, finalCheckpoint.averageFitness);
+  }
 
   // Cleanup
   trainer.destroy();
@@ -230,5 +263,5 @@ async function main(): Promise<void> {
   console.log('='.repeat(60));
 }
 
-// Run main
-main().catch(console.error);
+// Run bootstrap
+bootstrap().catch(console.error);

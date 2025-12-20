@@ -33,7 +33,18 @@ ai:
   aiPlayers: [1, 2, 3]       # Player indices to control (0-indexed)
   defaultAIType: aggressive  # 'random', 'aggressive', or 'neural'
   neuralDifficulty: medium   # 'easy', 'medium', 'hard', 'expert'
+  useWebWorker: true         # Run neural AI in Web Worker (non-blocking)
 ```
+
+### Web Worker Mode
+
+When `useWebWorker: true`, neural AI runs in a separate thread using TensorFlow.js WASM backend:
+
+- **Non-blocking**: Main game loop never waits for AI computation
+- **Async**: AI returns cached action immediately, computes new action in background
+- **1-2 frame latency**: Imperceptible delay between game state and AI decision
+
+Worker stats are shown in the Performance panel when enabled.
 
 ### Examples
 
@@ -190,7 +201,9 @@ The network outputs 2 values:
 src/
 ├── ai/
 │   ├── AIController.ts      # Base interface + RandomAI, AggressiveAI
-│   ├── NeuralAI.ts          # Neural network wrapper
+│   ├── NeuralAI.ts          # Neural network wrapper (blocking)
+│   ├── AsyncNeuralAI.ts     # Web Worker wrapper (non-blocking)
+│   ├── ai-worker.ts         # Web Worker with WASM TensorFlow.js
 │   ├── ModelLoader.ts       # Browser model loading + caching
 │   └── ObservationEncoder.ts # Game state -> neural input
 ├── core/
@@ -205,7 +218,9 @@ training/
 ├── config.ts                # Reads config.yaml
 └── checkpoints/             # Saved training state
 
-public/models/               # Exported models for browser
+public/
+├── models/                  # Exported models for browser
+└── tfjs-wasm/               # TensorFlow.js WASM binaries
 ```
 
 ---

@@ -91,8 +91,21 @@ export class Particle {
         const dy = this.y - other.y;
         const dir = normalize(dx, dy);
 
+        // Calculate relative velocity along separation axis
+        const relVelX = this.vx - other.vx;
+        const relVelY = this.vy - other.vy;
+        const approachSpeed = -(relVelX * dir.x + relVelY * dir.y);
+
         // Stronger repulsion when closer
         let strength = PARTICLE_CONFIG.repulsionStrength * (1 - dist / PARTICLE_CONFIG.repulsionRadius);
+
+        // Scale repulsion based on approach speed:
+        // - Approaching (positive): full repulsion (capped at 1)
+        // - Separating (negative): reduced repulsion (minimum 0.2 to prevent overlap)
+        const approachFactor = approachSpeed > 0
+          ? Math.min(approachSpeed / 100, 1)  // Approaching: scale up to 1
+          : 0.2;                               // Separating: minimal repulsion
+        strength *= approachFactor;
 
         // Apply extra repulsion between enemy particles to create clash effect
         if (other.owner !== this.owner) {

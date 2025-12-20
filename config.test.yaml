@@ -1,0 +1,97 @@
+# Fluid Wars Test Configuration
+# Minimal settings for fast testing
+
+game:
+  playerCount: 4
+  particlesPerPlayer: 50
+  canvasWidth: 800
+  canvasHeight: 600
+
+particle:
+  acceleration: 200
+  maxVelocity: 300
+  friction: 0.98
+  radius: 8
+  repulsionRadius: 24
+  repulsionStrength: 2000
+  enemyRepulsionMultiplier: 8.0
+  spawnRadius: 150
+
+conversion:
+  radius: 45
+  rate: 2.0
+  threshold: 1.0
+  decayMultiplier: 2
+
+player:
+  cursorSpeed: 300
+  cursorRadius: 8
+
+spatial:
+  cellSize: 50
+
+obstacle:
+  generator: 'grid'
+  playerMargin: 100
+  bounceEnergyLoss: 0.7
+  size: 40
+  minSizeMultiplier: 0.5
+  maxSizeMultiplier: 3
+  minCount: 5
+  maxCount: 10
+  margin: 50
+  gridSpacing: 150
+  wallThickness: 30
+  gapSize: 80
+  wallProbability: 0.5
+
+gameLoop:
+  fixedDt: 0.01666667
+  maxAccumulator: 0.1
+
+win:
+  mode: percentage
+  eliminationThreshold: 0
+  percentageThreshold: 0.65
+
+ai:
+  enabled: true
+  aiPlayers: [1, 2, 3]
+  defaultAIType: neural
+  neuralDifficulty: easy
+
+render:
+  backgroundColor: '#0a0a0f'
+
+cnn:
+  conv1Filters: 16
+  conv2Filters: 32
+  kernelSize: 3
+  denseUnits: 64
+  gridRows: 20
+  gridCols: 20
+  channels: 5
+
+# Fast training config for testing
+training:
+  populationSize: 4
+  eliteCount: 1
+  mutationRate: 0.15
+  mutationStrength: 0.25
+  crossoverRate: 0.6
+  maxGenerations: 3
+  checkpointInterval: 1
+  verbose: true
+  matchesPerGenome: 1
+  maxGameSteps: 300
+  stepsPerSecond: 60
+  simulator:
+    playerCount: 4
+    particlesPerPlayer: 30
+    canvasWidth: 600
+    canvasHeight: 400
+  difficultyTiers:
+    easy: 1
+    medium: 2
+    hard: 2
+    expert: 3

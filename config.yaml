@@ -70,7 +70,7 @@ obstacle:
   margin: 100            # pixels - margin from canvas edges
 
   # Grid maze settings
-  gridSpacing: 150       # pixels - distance between wall lines
+  gridSpacing: 300       # pixels - distance between wall lines
   wallThickness: 30      # pixels - thickness of walls
   gapSize: 80            # pixels - size of gaps for passage
   wallProbability: 0.7   # probability of wall at each grid position
@@ -102,6 +102,8 @@ ai:
   defaultAIType: neural
   # Difficulty for neural AI: 'easy', 'medium', 'hard', 'expert'
   neuralDifficulty: easy
+  # Use Web Worker for non-blocking AI (requires WASM backend)
+  useWebWorker: true
 
 # =============================================================================
 # RENDERING
@@ -135,7 +137,7 @@ training:
   mutationStrength: 0.25      # Std dev of Gaussian noise for mutations
   crossoverRate: 0.6          # Probability of crossover vs mutation-only
   maxGenerations: 5000
-  checkpointInterval: 10       # Save every N generations
+  checkpointInterval: 1       # Save every N generations
   verbose: true
 
   # Evaluation settings

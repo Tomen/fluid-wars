@@ -8,6 +8,7 @@ import { PLAYER_COLORS } from './types';
 import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
 import { RandomGenerator } from './maze/RandomGenerator';
 import { GridMazeGenerator } from './maze/GridMazeGenerator';
+import { profiler } from './profiler';
 export class Game {
     players = [];
     particles = [];
@@ -111,16 +112,28 @@ export class Game {
     }
     update(dt) {
         // Update players based on input (human) or AI controllers
+        // Track AI actions to profile - only wrap getAction(), not cursor movement
+        const aiActions = [];
+        profiler.start('update.ai');
+        for (let i = 0; i < this.players.length; i++) {
+            if (this.aiControllers.has(i)) {
+                const ai = this.aiControllers.get(i);
+                const action = ai.getAction(this);
+                aiActions.push({ player: this.players[i], action });
+            }
+        }
+        profiler.end('update.ai');
+        // Apply AI actions and handle human input (outside AI profiling)
         for (let i = 0; i < this.players.length; i++) {
             const player = this.players[i];
             if (this.aiControllers.has(i)) {
-                // AI player - get action from controller
-                const ai = this.aiControllers.get(i);
-                const action = ai.getAction(this);
-                // Move cursor towards target at same speed as human players
-                const targetX = action.targetX * this.canvasWidth;
-                const targetY = action.targetY * this.canvasHeight;
-                player.moveCursorTowards(targetX, targetY, dt, this.canvasWidth, this.canvasHeight);
+                // Find the action for this AI player
+                const aiAction = aiActions.find(a => a.player === player);
+                if (aiAction) {
+                    const targetX = aiAction.action.targetX * this.canvasWidth;
+                    const targetY = aiAction.action.targetY * this.canvasHeight;
+                    player.moveCursorTowards(targetX, targetY, dt, this.canvasWidth, this.canvasHeight);
+                }
             }
             else {
                 // Human player - use keyboard input
@@ -129,14 +142,17 @@ export class Game {
             }
         }
         // Build spatial hash for efficient collision detection
+        profiler.start('update.spatial');
         this.spatialHash.clear();
         for (const particle of this.particles) {
             this.spatialHash.insert(particle);
         }
+        profiler.end('update.spatial');
         // Clear conversion caches
         this.conversionProgressCache.clear();
         this.convertingPlayerColorCache.clear();
         // Update particles - each particle follows its owner's cursor
+        profiler.start('update.physics');
         for (const particle of this.particles) {
             const owner = this.players[particle.owner];
             if (!owner)
@@ -145,6 +161,12 @@ export class Game {
             // Query nearby particles from spatial hash (much faster than checking all particles)
             const nearbyParticles = this.spatialHash.queryNearby(particle.x, particle.y);
             particle.update(dt, cursorPos, this.canvasWidth, this.canvasHeight, nearbyParticles, this.obstacles);
+        }
+        profiler.end('update.physics');
+        // Handle conversion system
+        profiler.start('update.convert');
+        for (const particle of this.particles) {
+            const nearbyParticles = this.spatialHash.queryNearby(particle.x, particle.y);
             // Check for conversion
             const shouldConvert = this.conversionSystem.updateConversion(particle, nearbyParticles, dt);
             if (shouldConvert) {
@@ -170,6 +192,7 @@ export class Game {
                 }
             }
         }
+        profiler.end('update.convert');
         // Check win condition
         if (this.winner === -1) {
             this.checkWinCondition();
@@ -189,7 +212,9 @@ export class Game {
                             this.winner = p.id;
                         }
                     }
-                    console.log(`Player ${this.winner + 1} wins by elimination!`);
+                    if (!this.headless) {
+                        console.log(`Player ${this.winner + 1} wins by elimination!`);
+                    }
                     break;
                 }
             }
@@ -200,7 +225,9 @@ export class Game {
                 const percentage = player.particleCount / totalParticles;
                 if (percentage >= WIN_CONFIG.percentageThreshold) {
                     this.winner = player.id;
-                    console.log(`Player ${this.winner + 1} wins with ${(percentage * 100).toFixed(1)}% of particles!`);
+                    if (!this.headless) {
+                        console.log(`Player ${this.winner + 1} wins with ${(percentage * 100).toFixed(1)}% of particles!`);
+                    }
                     break;
                 }
             }

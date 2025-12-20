@@ -5,6 +5,28 @@ import type { Particle } from '../particle';
 import { CNN_CONFIG } from '../config';
 
 /**
+ * Raw particle data for worker communication (no class instances)
+ */
+export interface RawParticle {
+  owner: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+/**
+ * Raw obstacle data for worker communication
+ */
+export interface RawObstacle {
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  radius?: number;
+}
+
+/**
  * Configuration for the observation encoder
  */
 export interface EncoderConfig {
@@ -271,6 +293,202 @@ export class ObservationEncoder {
     const particles = game.getParticles();
     const obstacles = game.getObstacles();
     return this.buildGrid(particles, obstacles, playerId);
+  }
+
+  /**
+   * Encode from raw data (for Web Worker - no Game dependency)
+   * Returns shape [gridRows][gridCols][channels]
+   *
+   * @param playerId The player's perspective
+   * @param particles Raw particle data
+   * @param obstacles Raw obstacle data
+   * @param canvasWidth Canvas width (for grid cell calculation)
+   * @param canvasHeight Canvas height (for grid cell calculation)
+   * @returns 3D grid observation
+   */
+  encodeFromRawData(
+    playerId: number,
+    particles: RawParticle[],
+    obstacles: RawObstacle[],
+    canvasWidth: number,
+    canvasHeight: number
+  ): number[][][] {
+    // Update cell dimensions based on provided canvas size
+    const cellWidth = canvasWidth / this.config.gridCols;
+    const cellHeight = canvasHeight / this.config.gridRows;
+
+    return this.buildGridFromRaw(particles, obstacles, playerId, cellWidth, cellHeight);
+  }
+
+  /**
+   * Build grid from raw data (no Particle class dependency)
+   */
+  private buildGridFromRaw(
+    particles: RawParticle[],
+    obstacles: RawObstacle[],
+    playerId: number,
+    cellWidth: number,
+    cellHeight: number
+  ): number[][][] {
+    const { gridRows, gridCols, channels, maxDensity } = this.config;
+
+    // Initialize grid with zeros
+    const grid: number[][][] = [];
+    for (let r = 0; r < gridRows; r++) {
+      grid[r] = [];
+      for (let c = 0; c < gridCols; c++) {
+        grid[r][c] = new Array(channels).fill(0);
+      }
+    }
+
+    // Count particles and velocity per cell
+    const velocitySum: number[][][] = [];
+    for (let r = 0; r < gridRows; r++) {
+      velocitySum[r] = [];
+      for (let c = 0; c < gridCols; c++) {
+        velocitySum[r][c] = [0, 0]; // [friendly velocity sum, enemy velocity sum]
+      }
+    }
+
+    const maxVelocity = 150; // From PARTICLE_CONFIG.maxVelocity
+
+    for (const particle of particles) {
+      const col = Math.floor(particle.x / cellWidth);
+      const row = Math.floor(particle.y / cellHeight);
+
+      if (row >= 0 && row < gridRows && col >= 0 && col < gridCols) {
+        const isFriendly = particle.owner === playerId;
+        const velocity = Math.sqrt(particle.vx * particle.vx + particle.vy * particle.vy);
+
+        if (isFriendly) {
+          grid[row][col][0]++; // Friendly count
+          velocitySum[row][col][0] += velocity;
+        } else {
+          grid[row][col][1]++; // Enemy count
+          velocitySum[row][col][1] += velocity;
+        }
+      }
+    }
+
+    // Compute obstacle grid (can't use cache in worker - different obstacle format)
+    const obstacleGrid = this.computeObstacleGridFromRaw(obstacles, cellWidth, cellHeight);
+
+    // Normalize particle counts and compute average velocities
+    for (let r = 0; r < gridRows; r++) {
+      for (let c = 0; c < gridCols; c++) {
+        const friendlyCount = grid[r][c][0];
+        const enemyCount = grid[r][c][1];
+
+        // Normalize counts
+        grid[r][c][0] = Math.min(1, friendlyCount / maxDensity);
+        grid[r][c][1] = Math.min(1, enemyCount / maxDensity);
+
+        // Copy fractional obstacle coverage
+        grid[r][c][2] = obstacleGrid[r][c];
+
+        // Compute average velocity magnitudes
+        if (friendlyCount > 0) {
+          grid[r][c][3] = Math.min(1, (velocitySum[r][c][0] / friendlyCount) / maxVelocity);
+        }
+        if (enemyCount > 0) {
+          grid[r][c][4] = Math.min(1, (velocitySum[r][c][1] / enemyCount) / maxVelocity);
+        }
+      }
+    }
+
+    return grid;
+  }
+
+  /**
+   * Compute obstacle grid from raw obstacle data
+   */
+  private computeObstacleGridFromRaw(
+    obstacles: RawObstacle[],
+    cellWidth: number,
+    cellHeight: number
+  ): number[][] {
+    const { gridRows, gridCols } = this.config;
+
+    // Initialize grid with zeros
+    const grid: number[][] = [];
+    for (let r = 0; r < gridRows; r++) {
+      grid[r] = new Array(gridCols).fill(0);
+    }
+
+    const cellArea = cellWidth * cellHeight;
+
+    // Calculate fractional coverage for each obstacle
+    for (const obstacle of obstacles) {
+      if (obstacle.width !== undefined && obstacle.height !== undefined) {
+        // Rectangle obstacle
+        const obstacleLeft = obstacle.x;
+        const obstacleRight = obstacle.x + obstacle.width;
+        const obstacleTop = obstacle.y;
+        const obstacleBottom = obstacle.y + obstacle.height;
+
+        const startCol = Math.max(0, Math.floor(obstacleLeft / cellWidth));
+        const endCol = Math.min(gridCols - 1, Math.floor(obstacleRight / cellWidth));
+        const startRow = Math.max(0, Math.floor(obstacleTop / cellHeight));
+        const endRow = Math.min(gridRows - 1, Math.floor(obstacleBottom / cellHeight));
+
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = startCol; c <= endCol; c++) {
+            const cellLeft = c * cellWidth;
+            const cellRight = cellLeft + cellWidth;
+            const cellTop = r * cellHeight;
+            const cellBottom = cellTop + cellHeight;
+
+            const overlapLeft = Math.max(cellLeft, obstacleLeft);
+            const overlapRight = Math.min(cellRight, obstacleRight);
+            const overlapTop = Math.max(cellTop, obstacleTop);
+            const overlapBottom = Math.min(cellBottom, obstacleBottom);
+
+            const overlapWidth = Math.max(0, overlapRight - overlapLeft);
+            const overlapHeight = Math.max(0, overlapBottom - overlapTop);
+            const overlapArea = overlapWidth * overlapHeight;
+
+            grid[r][c] = Math.min(1, grid[r][c] + overlapArea / cellArea);
+          }
+        }
+      } else if (obstacle.radius !== undefined) {
+        // Circle obstacle
+        const obstacleLeft = obstacle.x - obstacle.radius;
+        const obstacleRight = obstacle.x + obstacle.radius;
+        const obstacleTop = obstacle.y - obstacle.radius;
+        const obstacleBottom = obstacle.y + obstacle.radius;
+
+        const startCol = Math.max(0, Math.floor(obstacleLeft / cellWidth));
+        const endCol = Math.min(gridCols - 1, Math.floor(obstacleRight / cellWidth));
+        const startRow = Math.max(0, Math.floor(obstacleTop / cellHeight));
+        const endRow = Math.min(gridRows - 1, Math.floor(obstacleBottom / cellHeight));
+
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = startCol; c <= endCol; c++) {
+            const cellLeft = c * cellWidth;
+            const cellTop = r * cellHeight;
+            const samples = 4;
+            let insideCount = 0;
+
+            for (let sy = 0; sy < samples; sy++) {
+              for (let sx = 0; sx < samples; sx++) {
+                const px = cellLeft + (sx + 0.5) * cellWidth / samples;
+                const py = cellTop + (sy + 0.5) * cellHeight / samples;
+                const dx = px - obstacle.x;
+                const dy = py - obstacle.y;
+                if (dx * dx + dy * dy <= obstacle.radius * obstacle.radius) {
+                  insideCount++;
+                }
+              }
+            }
+
+            const coverage = insideCount / (samples * samples);
+            grid[r][c] = Math.min(1, grid[r][c] + coverage);
+          }
+        }
+      }
+    }
+
+    return grid;
   }
 
   /**

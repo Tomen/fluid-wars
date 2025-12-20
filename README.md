@@ -43,7 +43,9 @@ game:
 ai:
   enabled: true
   aiPlayers: [1, 2, 3]        # 0-indexed player IDs
-  defaultAIType: aggressive   # random, aggressive, or neural
+  defaultAIType: neural       # random, aggressive, or neural
+  neuralDifficulty: easy      # easy, medium, hard, expert
+  useWebWorker: true          # Run AI in separate thread (non-blocking)
 
 win:
   mode: percentage

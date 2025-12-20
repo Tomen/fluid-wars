@@ -69,12 +69,16 @@ export class Obstacle {
                 const velDotNormal = particle.vx * normalX + particle.vy * normalY;
                 // Only reflect if moving toward the obstacle
                 if (velDotNormal < 0) {
-                    // Reflect velocity
-                    particle.vx -= 2 * velDotNormal * normalX;
-                    particle.vy -= 2 * velDotNormal * normalY;
-                    // Apply energy loss
-                    particle.vx *= OBSTACLE_CONFIG.bounceEnergyLoss;
-                    particle.vy *= OBSTACLE_CONFIG.bounceEnergyLoss;
+                    // Wall sliding: preserve tangential velocity, only reduce normal component
+                    // This lets particles slide along walls instead of bouncing back and forth
+                    const tangentX = -normalY;
+                    const tangentY = normalX;
+                    const velDotTangent = particle.vx * tangentX + particle.vy * tangentY;
+                    // Reconstruct velocity: full tangent + reflected normal with energy loss
+                    // Normal component is reversed and reduced by energy loss factor
+                    const reducedNormal = -velDotNormal * OBSTACLE_CONFIG.bounceEnergyLoss;
+                    particle.vx = velDotTangent * tangentX + reducedNormal * normalX;
+                    particle.vy = velDotTangent * tangentY + reducedNormal * normalY;
                 }
             }
             else {

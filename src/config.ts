@@ -64,6 +64,7 @@ interface YamlConfig {
     aiPlayers: number[];
     defaultAIType: 'random' | 'aggressive' | 'neural';
     neuralDifficulty: 'easy' | 'medium' | 'hard' | 'expert';
+    useWebWorker: boolean;
   };
   render: {
     backgroundColor: string;
@@ -120,7 +121,9 @@ if (isBrowser) {
   const fs = await import('fs');
   const path = await import('path');
   const yaml = await import('js-yaml');
-  const configPath = path.resolve(process.cwd(), 'config.yaml');
+  // Support CONFIG_PATH env var for testing with different configs
+  const configFilename = process.env.CONFIG_PATH || 'config.yaml';
+  const configPath = path.resolve(process.cwd(), configFilename);
   const configFile = fs.readFileSync(configPath, 'utf8');
   config = yaml.load(configFile) as YamlConfig;
 }
@@ -227,6 +230,7 @@ export const AI_CONFIG = {
   aiPlayers: config.ai.aiPlayers,
   defaultAIType: config.ai.defaultAIType,
   neuralDifficulty: config.ai.neuralDifficulty,
+  useWebWorker: config.ai.useWebWorker,
 } as const;
 
 /**

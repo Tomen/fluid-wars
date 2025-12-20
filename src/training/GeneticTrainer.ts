@@ -3,14 +3,22 @@
 import * as tf from '@tensorflow/tfjs';
 import { TRAINING_CONFIG } from '../config';
 import { createModel, setWeights, getWeightCount, weightsToJSON, weightsFromJSON } from '../ai/CNNModel';
-import { FitnessEvaluator, EvaluatorConfig } from './FitnessEvaluator';
+import { FitnessEvaluator, EvaluatorConfig, MatchResult, GenerationMatchStats } from './FitnessEvaluator';
 
 /**
- * Individual genome (weight vector) with fitness
+ * Individual genome (weight vector) with fitness and lineage
  */
-interface Genome {
+export interface Genome {
+  id: string; // Unique ID like "G5.3" (generation 5, index 3)
   weights: Float32Array;
   fitness: number;
+  parentIds: string[]; // Parent genome IDs (1 for mutation, 2 for crossover)
+  // Per-genome stats from evaluation
+  avgTarget: [number, number];
+  avgVariance: number;
+  totalConversions: number;
+  wins: number;
+  matches: number;
 }
 
 /**
@@ -33,6 +41,8 @@ export interface GenerationStats {
   averageFitness: number;
   worstFitness: number;
   elapsedTime: number;
+  matchStats: GenerationMatchStats; // Aggregate stats from all matches
+  topGenomes: Genome[]; // Top N genomes from this generation (before evolution)
 }
 
 /**
@@ -81,11 +91,28 @@ export class GeneticTrainer {
     this.population = [];
     for (let i = 0; i < TRAINING_CONFIG.populationSize; i++) {
       const weights = this.randomWeights();
-      this.population.push({ weights, fitness: 0 });
+      this.population.push(this.createGenome(`G0.${i}`, weights, []));
     }
 
     this.generation = 0;
     console.log(`[GeneticTrainer] Population initialized`);
+  }
+
+  /**
+   * Create a new genome with default stats
+   */
+  private createGenome(id: string, weights: Float32Array, parentIds: string[]): Genome {
+    return {
+      id,
+      weights,
+      fitness: 0,
+      parentIds,
+      avgTarget: [0, 0],
+      avgVariance: 0,
+      totalConversions: 0,
+      wins: 0,
+      matches: 0,
+    };
   }
 
   /**
@@ -115,11 +142,20 @@ export class GeneticTrainer {
   async runGeneration(): Promise<GenerationStats> {
     const startTime = Date.now();
 
+    // Clear match results from previous generation
+    this.evaluator.clearMatchResults();
+
     // Evaluate all genomes
     await this.evaluatePopulation();
 
+    // Get aggregate match stats
+    const matchStats = this.evaluator.getGenerationStats();
+
     // Sort by fitness (descending)
     this.population.sort((a, b) => b.fitness - a.fitness);
+
+    // Get top genomes before evolution (deep copy to preserve stats)
+    const topGenomes = this.population.slice(0, 5).map(g => ({ ...g }));
 
     // Compute stats
     const stats: GenerationStats = {
@@ -128,6 +164,8 @@ export class GeneticTrainer {
       averageFitness: this.population.reduce((sum, g) => sum + g.fitness, 0) / this.population.length,
       worstFitness: this.population[this.population.length - 1].fitness,
       elapsedTime: Date.now() - startTime,
+      matchStats,
+      topGenomes,
     };
 
     // Store stats for checkpointing (evolve() will reset fitness values)
@@ -155,9 +193,19 @@ export class GeneticTrainer {
       return model;
     });
 
-    // Evaluate each model
+    // Evaluate each model and store per-genome stats
     for (let i = 0; i < this.population.length; i++) {
-      this.population[i].fitness = await this.evaluator.evaluateModel(models[i], models);
+      const result = await this.evaluator.evaluateModel(models[i], models);
+      const genome = this.population[i];
+
+      // Store evaluation results on genome
+      genome.fitness = result.fitness;
+      genome.avgTarget = result.avgTarget;
+      genome.avgVariance = result.avgVariance;
+      genome.totalConversions = result.totalConversions;
+      genome.wins = result.wins;
+      genome.matches = result.matches;
+
       completed++;
       if (this.progressCallback) {
         this.progressCallback(completed, total);
@@ -176,30 +224,37 @@ export class GeneticTrainer {
   private evolve(): void {
     const newPopulation: Genome[] = [];
     const popSize = TRAINING_CONFIG.populationSize;
+    const nextGen = this.generation + 1;
+    let childIndex = 0;
 
-    // Keep elites unchanged
+    // Keep elites unchanged (but give them new IDs in next generation)
     for (let i = 0; i < TRAINING_CONFIG.eliteCount && i < popSize; i++) {
-      newPopulation.push({
-        weights: new Float32Array(this.population[i].weights),
-        fitness: 0,
-      });
+      const elite = this.population[i];
+      const newId = `G${nextGen}.${childIndex++}`;
+      newPopulation.push(this.createGenome(
+        newId,
+        new Float32Array(elite.weights),
+        [elite.id] // Elite carries forward from itself
+      ));
     }
 
     // Fill rest with offspring
     while (newPopulation.length < popSize) {
+      const newId = `G${nextGen}.${childIndex++}`;
+
       if (Math.random() < TRAINING_CONFIG.crossoverRate) {
         // Crossover: blend two parents
         const parent1 = this.tournamentSelect();
         const parent2 = this.tournamentSelect();
         const childWeights = this.crossover(parent1.weights, parent2.weights);
         this.mutate(childWeights);
-        newPopulation.push({ weights: childWeights, fitness: 0 });
+        newPopulation.push(this.createGenome(newId, childWeights, [parent1.id, parent2.id]));
       } else {
         // Mutation only: clone and mutate
         const parent = this.tournamentSelect();
         const childWeights = new Float32Array(parent.weights);
         this.mutate(childWeights);
-        newPopulation.push({ weights: childWeights, fitness: 0 });
+        newPopulation.push(this.createGenome(newId, childWeights, [parent.id]));
       }
     }
 
@@ -265,6 +320,16 @@ export class GeneticTrainer {
   }
 
   /**
+   * Get top N genomes sorted by fitness (for logging/debugging)
+   */
+  getTopGenomes(n: number = 5): Genome[] {
+    return this.population
+      .slice() // Don't mutate original
+      .sort((a, b) => b.fitness - a.fitness)
+      .slice(0, n);
+  }
+
+  /**
    * Create a checkpoint of current training state
    */
   createCheckpoint(): Checkpoint {
@@ -284,11 +349,42 @@ export class GeneticTrainer {
     this.generation = checkpoint.generation;
     this.lastBestFitness = checkpoint.bestFitness;
     this.lastAverageFitness = checkpoint.averageFitness;
-    this.population = checkpoint.population.map(weights => ({
-      weights: weightsFromJSON(weights),
-      fitness: 0,
-    }));
+    this.population = checkpoint.population.map((weights, i) =>
+      this.createGenome(`G${this.generation}.${i}`, weightsFromJSON(weights), [])
+    );
     console.log(`[GeneticTrainer] Loaded checkpoint at generation ${this.generation}`);
+  }
+
+  /**
+   * Run a diagnostic match with the best model against random opponents
+   * Used for debugging/monitoring training progress
+   */
+  async runDiagnosticMatch(): Promise<MatchResult> {
+    // Create models for best genome and random opponents
+    const playerCount = this.evaluator.getConfig().simulatorConfig.playerCount || 4;
+
+    // Best model is player 0
+    const bestModel = createModel();
+    setWeights(bestModel, this.population[0].weights);
+
+    // Random opponents from population
+    const models: tf.Sequential[] = [bestModel];
+    for (let i = 1; i < playerCount; i++) {
+      const opponentIdx = Math.floor(Math.random() * this.population.length);
+      const model = createModel();
+      setWeights(model, this.population[opponentIdx].weights);
+      models.push(model);
+    }
+
+    // Play diagnostic match
+    const result = await this.evaluator.playDiagnosticMatch(models);
+
+    // Dispose models
+    for (const model of models) {
+      model.dispose();
+    }
+
+    return result;
   }
 
   /**

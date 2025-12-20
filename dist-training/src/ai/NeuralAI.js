@@ -1,6 +1,7 @@
 // NeuralAI - CNN-based AI controller using TensorFlow.js
 import { ObservationEncoder } from './ObservationEncoder';
 import { predict } from './CNNModel';
+import { profiler } from '../profiler';
 /**
  * Neural network-based AI controller using CNN
  *
@@ -38,9 +39,13 @@ export class NeuralAI {
      */
     getAction(game) {
         // Encode the game state as 3D grid from this player's perspective
+        profiler.start('update.ai.encode');
         const observation = this.encoder.encode3D(game, this.playerId);
+        profiler.end('update.ai.encode');
         // Run CNN prediction
+        profiler.start('update.ai.predict');
         const [targetX, targetY] = predict(this.model, observation);
+        profiler.end('update.ai.predict');
         // Output is already in [0, 1] range due to sigmoid activation
         return {
             targetX,

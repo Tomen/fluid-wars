@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
     "@tensorflow/tfjs-node": "^4.22.0",
     "js-yaml": "^4.1.1"
   }
