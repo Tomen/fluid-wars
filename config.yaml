@@ -35,10 +35,10 @@ particle:
   repulsionRadius: 24    # pixels - distance at which particles repel each other
                          # BALANCE: should be < conversion.radius for conversion to work
   repulsionStrength: 1000 # force units - base repulsion force
-  enemyRepulsionMultiplier: 8.0  # multiplier - extra repulsion between enemy particles
+  enemyRepulsionMultiplier: 4.0  # multiplier - extra repulsion between enemy particles
                          # BALANCE: higher = attackers spread more, harder to outnumber defenders
                          # TIP: reduce to 4-5 if corner camping is too strong
-  friendlyRepulsionMultiplier: 4.0  # multiplier - repulsion between same-owner particles
+  friendlyRepulsionMultiplier: 8.0  # multiplier - repulsion between same-owner particles
                          # BALANCE: higher = friendlies spread out more, less compression
   collisionDamping: 1.0  # per second - velocity loss when particles collide (at point-blank)
                          # BALANCE: higher = particles lose more energy on collision
@@ -58,7 +58,7 @@ conversion:
   threshold: 1.0         # progress required to convert
   decayMultiplier: 2     # decay rate multiplier when not being converted
                          # BALANCE: higher = defenders recover faster (currently 2x)
-  friendlySupportFactor: 0.7  # how much nearby friends help defend (1.0 = full, 0.5 = half)
+  friendlySupportFactor: 0.5  # how much nearby friends help defend (1.0 = full, 0.5 = half)
                          # BALANCE: defenderAdvantage = 1/factor (currently 1.43x)
                          # Formula: conversion triggers when enemies > friends × factor
                          # TIP: reduce to 0.5 if defense is too strong
@@ -125,6 +125,14 @@ ai:
 # =============================================================================
 render:
   backgroundColor: '#0a0a0f'
+  # Particle rendering style: 'solid', 'soft', or 'glow'
+  # - solid: Hard circles (fastest, classic look)
+  # - soft: Gradient circles that blend where they overlap
+  # - glow: Same as soft but with additive blending (brighter overlaps)
+  particleStyle: 'soft'
+  # Soft/glow settings
+  shadowBlur: 6              # multiplier - gradient extends this many times the particle radius
+  shadowAlpha: 1.0           # unused, kept for compatibility
 
 # =============================================================================
 # CNN ARCHITECTURE

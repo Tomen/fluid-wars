@@ -73,6 +73,9 @@ interface YamlConfig {
   };
   render: {
     backgroundColor: string;
+    particleStyle: 'solid' | 'soft' | 'glow';
+    shadowBlur: number;
+    shadowAlpha: number;
   };
   cnn: {
     conv1Filters: number;
@@ -250,6 +253,9 @@ export const AI_CONFIG = {
  */
 export const RENDER_CONFIG = {
   backgroundColor: config.render.backgroundColor,
+  particleStyle: config.render.particleStyle,
+  shadowBlur: config.render.shadowBlur,
+  shadowAlpha: config.render.shadowAlpha,
 } as const;
 
 /**

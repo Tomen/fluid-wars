@@ -4,6 +4,7 @@ import type { Particle } from './particle';
 import type { Obstacle } from './obstacle';
 import type { Player } from './player';
 import { RENDER_CONFIG } from './config';
+import { ParticleRenderer } from './rendering/ParticleRenderer';
 
 // Height of the power distribution bar at the top
 export const POWER_BAR_HEIGHT = 40;
@@ -15,6 +16,8 @@ export class Renderer {
   /** The playable game area height (excludes power bar) */
   readonly gameHeight: number;
 
+  private particleRenderer: ParticleRenderer;
+
   constructor(canvas: HTMLCanvasElement) {
     this.width = canvas.width;
     this.height = canvas.height;
@@ -25,6 +28,9 @@ export class Renderer {
       throw new Error('Could not get 2D context');
     }
     this.ctx = ctx;
+
+    // Initialize particle renderer with pre-rendered sprites
+    this.particleRenderer = new ParticleRenderer();
   }
 
   clear(): void {
@@ -48,11 +54,7 @@ export class Renderer {
   drawParticles(particles: Particle[], conversionProgressMap?: Map<Particle, number>, convertingColorMap?: Map<Particle, string>): void {
     this.ctx.save();
     this.ctx.translate(0, POWER_BAR_HEIGHT);
-    for (const particle of particles) {
-      const progress = conversionProgressMap?.get(particle);
-      const convertingColor = convertingColorMap?.get(particle);
-      particle.draw(this.ctx, progress, convertingColor);
-    }
+    this.particleRenderer.draw(this.ctx, particles, conversionProgressMap, convertingColorMap);
     this.ctx.restore();
   }
 

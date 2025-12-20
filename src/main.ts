@@ -240,12 +240,12 @@ class App {
       case 'playing':
       case 'gameover':
         if (this.game) {
-          // Draw obstacles first (behind particles)
-          this.renderer.drawObstacles(this.game.getObstacles());
-          // Draw particles with conversion progress
+          // Draw particles first (behind obstacles)
           const conversionProgress = this.game.getConversionProgressMap();
           const convertingColors = this.game.getConvertingPlayerColorMap();
           this.renderer.drawParticles(this.game.getParticles(), conversionProgress, convertingColors);
+          // Draw obstacles on top of particles
+          this.renderer.drawObstacles(this.game.getObstacles());
           // Draw player cursors on top
           this.renderer.drawPlayers(this.game.getPlayers());
         }
