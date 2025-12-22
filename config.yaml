@@ -23,8 +23,8 @@ game:
 # =============================================================================
 particle:
   # Movement
-  acceleration: 200      # units/sec² - how fast particles accelerate toward cursor
-  maxVelocity: 300       # units/sec - maximum particle speed
+  acceleration: 400      # units/sec² - how fast particles accelerate toward cursor
+  maxVelocity: 800       # units/sec - maximum particle speed
                          # BALANCE: affects escape ratio (maxVelocity × conversionTime / conversionRadius)
   friction: 0.98         # per frame - velocity decay (0.98 = 2% loss per frame)
 
@@ -40,7 +40,7 @@ particle:
                          # TIP: reduce to 4-5 if corner camping is too strong
   friendlyRepulsionMultiplier: 8.0  # multiplier - repulsion between same-owner particles
                          # BALANCE: higher = friendlies spread out more, less compression
-  collisionDamping: 1.0  # per second - velocity loss when particles collide (at point-blank)
+  collisionDamping: 2.0  # per second - velocity loss when particles collide (at point-blank)
                          # BALANCE: higher = particles lose more energy on collision
 
   # Spawn
@@ -53,12 +53,12 @@ particle:
 conversion:
   radius: 45             # pixels - distance at which conversion can occur
                          # BALANCE: should be > particle.repulsionRadius for conversion to work
-  rate: 2.0              # progress/sec - how fast conversion builds up when outnumbered
+  rate: 3.0              # progress/sec - how fast conversion builds up when outnumbered
                          # BALANCE: conversionTime = threshold / rate (currently 0.5 sec)
   threshold: 1.0         # progress required to convert
   decayMultiplier: 2     # decay rate multiplier when not being converted
                          # BALANCE: higher = defenders recover faster (currently 2x)
-  friendlySupportFactor: 0.5  # how much nearby friends help defend (1.0 = full, 0.5 = half)
+  friendlySupportFactor: 0.4  # how much nearby friends help defend (1.0 = full, 0.5 = half)
                          # BALANCE: defenderAdvantage = 1/factor (currently 1.43x)
                          # Formula: conversion triggers when enemies > friends × factor
                          # TIP: reduce to 0.5 if defense is too strong

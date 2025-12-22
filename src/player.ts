@@ -20,38 +20,20 @@ export class Player {
     this.cursorY = startY;
   }
 
-  updateCursor(input: Vec2, dt: number, canvasWidth: number, canvasHeight: number): void {
-    // Move cursor based on input direction (normalized vector expected)
-    this.cursorX += input.x * PLAYER_CONFIG.cursorSpeed * dt;
-    this.cursorY += input.y * PLAYER_CONFIG.cursorSpeed * dt;
-
-    // Keep cursor within bounds
-    this.cursorX = clamp(this.cursorX, PLAYER_CONFIG.cursorRadius, canvasWidth - PLAYER_CONFIG.cursorRadius);
-    this.cursorY = clamp(this.cursorY, PLAYER_CONFIG.cursorRadius, canvasHeight - PLAYER_CONFIG.cursorRadius);
+  /**
+   * Set cursor to an absolute position (used by AI and mouse input)
+   */
+  setCursor(x: number, y: number, canvasWidth: number, canvasHeight: number): void {
+    this.cursorX = clamp(x, PLAYER_CONFIG.cursorRadius, canvasWidth - PLAYER_CONFIG.cursorRadius);
+    this.cursorY = clamp(y, PLAYER_CONFIG.cursorRadius, canvasHeight - PLAYER_CONFIG.cursorRadius);
   }
 
   /**
-   * Move cursor towards a target position at the same speed as human players
-   * Used by AI controllers to have fair movement speed
+   * Move cursor by a delta (used by keyboard input)
    */
-  moveCursorTowards(targetX: number, targetY: number, dt: number, canvasWidth: number, canvasHeight: number): void {
-    // Calculate direction to target
-    const dx = targetX - this.cursorX;
-    const dy = targetY - this.cursorY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // If we're close enough, just snap to target
-    const maxMove = PLAYER_CONFIG.cursorSpeed * dt;
-    if (distance <= maxMove) {
-      this.cursorX = targetX;
-      this.cursorY = targetY;
-    } else {
-      // Move towards target at cursor speed
-      const nx = dx / distance;
-      const ny = dy / distance;
-      this.cursorX += nx * maxMove;
-      this.cursorY += ny * maxMove;
-    }
+  moveCursor(input: Vec2, dt: number, canvasWidth: number, canvasHeight: number): void {
+    this.cursorX += input.x * PLAYER_CONFIG.cursorSpeed * dt;
+    this.cursorY += input.y * PLAYER_CONFIG.cursorSpeed * dt;
 
     // Keep cursor within bounds
     this.cursorX = clamp(this.cursorX, PLAYER_CONFIG.cursorRadius, canvasWidth - PLAYER_CONFIG.cursorRadius);

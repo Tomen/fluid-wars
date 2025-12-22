@@ -9,6 +9,7 @@ import { SpatialHash } from './collision';
 import { ConversionSystem } from './conversion';
 import { PLAYER_COLORS } from './types';
 import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
+import { POWER_BAR_HEIGHT } from './renderer';
 import type { AIController } from './ai/AIController';
 import { AsyncNeuralAI } from './ai/AsyncNeuralAI';
 import { RandomGenerator } from './maze/RandomGenerator';
@@ -170,17 +171,28 @@ export class Game {
       const player = this.players[i];
 
       if (this.aiControllers.has(i)) {
-        // Find the action for this AI player
+        // AI player - set cursor directly to target position
         const aiAction = aiActions.find(a => a.player === player);
         if (aiAction) {
           const targetX = aiAction.action.targetX * this.canvasWidth;
           const targetY = aiAction.action.targetY * this.canvasHeight;
-          player.moveCursorTowards(targetX, targetY, dt, this.canvasWidth, this.canvasHeight);
+          player.setCursor(targetX, targetY, this.canvasWidth, this.canvasHeight);
+        }
+      } else if (i === 0) {
+        // Player 1 - mouse takes priority, fallback to keyboard
+        const mousePos = this.input.getMousePosition();
+        if (mousePos) {
+          // Offset Y by power bar height to convert canvas coords to game coords
+          const gameY = mousePos.y - POWER_BAR_HEIGHT;
+          player.setCursor(mousePos.x, gameY, this.canvasWidth, this.canvasHeight);
+        } else {
+          const input = this.input.getPlayerInput(i);
+          player.moveCursor(input, dt, this.canvasWidth, this.canvasHeight);
         }
       } else {
-        // Human player - use keyboard input
+        // Other human players - keyboard only
         const input = this.input.getPlayerInput(i);
-        player.updateCursor(input, dt, this.canvasWidth, this.canvasHeight);
+        player.moveCursor(input, dt, this.canvasWidth, this.canvasHeight);
       }
     }
 
@@ -336,6 +348,13 @@ export class Game {
 
   destroy(): void {
     this.input.destroy();
+  }
+
+  /**
+   * Set the canvas for mouse input tracking
+   */
+  setCanvas(canvas: HTMLCanvasElement): void {
+    this.input.setCanvas(canvas);
   }
 
   /**

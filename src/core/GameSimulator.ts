@@ -125,21 +125,15 @@ export class GameSimulator {
   }
 
   /**
-   * Apply an AI action to a player (move cursor towards target at speed limit)
+   * Apply an AI action to a player (set cursor directly to target)
    */
   private applyAIAction(player: Player, action: AIAction): void {
     // Convert normalized action to canvas coordinates
     const targetX = action.targetX * this.config.canvasWidth;
     const targetY = action.targetY * this.config.canvasHeight;
 
-    // Move cursor towards target at same speed as human players
-    player.moveCursorTowards(
-      targetX,
-      targetY,
-      this.config.fixedDt,
-      this.config.canvasWidth,
-      this.config.canvasHeight
-    );
+    // Set cursor directly to target position
+    player.setCursor(targetX, targetY, this.config.canvasWidth, this.config.canvasHeight);
   }
 
   /**

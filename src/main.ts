@@ -69,6 +69,7 @@ class App {
     };
 
     this.game = new Game(config, this.renderer.width, this.renderer.gameHeight);
+    this.game.setCanvas(this.canvas);
 
     // Initialize observation encoder with actual canvas dimensions
     this.observationEncoder = new ObservationEncoder({
@@ -334,6 +335,7 @@ class App {
     };
 
     this.game = new Game(config, this.renderer.width, this.renderer.gameHeight);
+    this.game.setCanvas(this.canvas);
 
     // Re-setup AI controllers
     if (AI_CONFIG.enabled) {
