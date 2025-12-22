@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { GameSimulator } from '../core/GameSimulator';
-import type { ScenarioConfig } from '../scenario';
+import type { ScenarioConfig } from '../game/scenario';
 import type { AIAction } from '../core/AIInterface';
 
 interface TestResult {

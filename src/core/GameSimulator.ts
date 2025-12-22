@@ -4,7 +4,7 @@ import { Game } from '../game';
 import { Player } from '../player';
 import { Particle } from '../particle';
 import type { GameConfig } from '../types';
-import type { ScenarioConfig } from '../scenario';
+import type { ScenarioConfig } from '../game/scenario';
 import type {
   GameState,
   StepResult,

@@ -1,7 +1,7 @@
 // Scenario configuration for Fluid Wars
 // Scenarios define level setups, test cases, and custom game configurations
 
-import type { WinConfig, ObstacleData } from './types';
+import type { WinConfig, ObstacleData } from '../types';
 
 /**
  * Particle spawn pattern configuration

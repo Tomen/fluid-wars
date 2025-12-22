@@ -7,8 +7,17 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div id="menu-container"></div>
-  <canvas id="game-canvas" width="1200" height="800"></canvas>
+  <div id="app-container">
+    <canvas id="game-canvas" width="1200" height="800"></canvas>
+    <div id="ui-area">
+      <div id="power-bar"></div>
+      <div id="status-panel"></div>
+      <div id="console">
+        <div id="console-log"></div>
+        <input id="console-input" type="text" placeholder="Type a message or /command..." />
+      </div>
+    </div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

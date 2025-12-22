@@ -1,7 +1,7 @@
 // Network protocol types and binary encoding/decoding
 // Uses Transferable ArrayBuffer for zero-copy transfer between worker and main thread
 
-import type { ScenarioConfig } from '../scenario';
+import type { ScenarioConfig } from '../game/scenario';
 import type { ObstacleData } from '../types';
 
 // ============================================================================

@@ -1,8 +1,8 @@
 // GeneticTrainer - Genetic algorithm for CNN weight evolution
 
 import * as tf from '@tensorflow/tfjs';
-import { TRAINING_CONFIG } from '../config';
-import { createModel, setWeights, getWeightCount, weightsToJSON, weightsFromJSON } from '../ai/CNNModel';
+import { TRAINING_CONFIG } from '../../config';
+import { createModel, setWeights, getWeightCount, weightsToJSON, weightsFromJSON } from '../CNNModel';
 import { FitnessEvaluator, EvaluatorConfig, MatchResult, GenerationMatchStats } from './FitnessEvaluator';
 
 /**

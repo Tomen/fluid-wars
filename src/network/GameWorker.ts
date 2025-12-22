@@ -4,7 +4,7 @@
 /// <reference lib="webworker" />
 
 import { GameSimulator } from '../core/GameSimulator';
-import type { ScenarioConfig } from '../scenario';
+import type { ScenarioConfig } from '../game/scenario';
 import type { AIAction } from '../core/AIInterface';
 import { PLAYER_COLORS } from '../types';
 import {

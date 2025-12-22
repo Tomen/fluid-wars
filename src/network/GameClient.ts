@@ -1,7 +1,7 @@
 // GameClient - Main thread client that connects to game worker
 // Handles spawning the worker, receiving frames, and rendering
 
-import type { ScenarioConfig } from '../scenario';
+import type { ScenarioConfig } from '../game/scenario';
 import type { ObstacleData } from '../types';
 import {
   decodeFrame,

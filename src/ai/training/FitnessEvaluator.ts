@@ -1,10 +1,10 @@
 // FitnessEvaluator - Evaluate model fitness through multi-player matches
 
 import * as tf from '@tensorflow/tfjs';
-import { GameSimulator } from '../core/GameSimulator';
-import type { SimulatorConfig, AIAction } from '../core/AIInterface';
-import { NeuralAI } from '../ai/NeuralAI';
-import type { EncoderConfig } from '../ai/ObservationEncoder';
+import { GameSimulator } from '../../core/GameSimulator';
+import type { SimulatorConfig, AIAction } from '../../core/AIInterface';
+import { NeuralAI } from '../NeuralAI';
+import type { EncoderConfig } from '../ObservationEncoder';
 
 /**
  * Configuration for fitness evaluation

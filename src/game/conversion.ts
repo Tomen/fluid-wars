@@ -1,8 +1,8 @@
 // Conversion system for particle ownership changes
 
-import type { Particle } from './particle';
-import { distance } from './utils';
-import { CONVERSION_CONFIG } from './config';
+import type { Particle } from '../particle';
+import { distance } from '../utils';
+import { CONVERSION_CONFIG } from '../config';
 
 export interface ConversionProgress {
   particleId: number;

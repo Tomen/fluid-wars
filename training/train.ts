@@ -23,7 +23,7 @@ async function bootstrap() {
 
   const fs = await import('fs');
   const path = await import('path');
-  const geneticModule = await import('../src/training/GeneticTrainer');
+  const geneticModule = await import('../src/ai/training/GeneticTrainer');
   const GeneticTrainer = geneticModule.GeneticTrainer;
 
   const { getWeights, weightsToJSON } = await import('../src/ai/CNNModel');
@@ -48,7 +48,7 @@ async function bootstrap() {
   }
 
   // Save a checkpoint to disk
-  function saveCheckpoint(checkpoint: import('../src/training/GeneticTrainer').Checkpoint): void {
+  function saveCheckpoint(checkpoint: import('../src/ai/training/GeneticTrainer').Checkpoint): void {
     const filename = path.join(CHECKPOINT_DIR, `checkpoint_gen_${checkpoint.generation}.json`);
     fs.writeFileSync(filename, JSON.stringify(checkpoint, null, 2));
     console.log(`Saved checkpoint: ${filename}`);
@@ -84,7 +84,7 @@ async function bootstrap() {
   }
 
   // Load the latest checkpoint if available
-  function loadLatestCheckpoint(): import('../src/training/GeneticTrainer').Checkpoint | null {
+  function loadLatestCheckpoint(): import('../src/ai/training/GeneticTrainer').Checkpoint | null {
     if (!fs.existsSync(CHECKPOINT_DIR)) {
       return null;
     }
@@ -105,7 +105,7 @@ async function bootstrap() {
     console.log(`Loading checkpoint: ${latestFile}`);
 
     const data = fs.readFileSync(latestFile, 'utf-8');
-    return JSON.parse(data) as import('../src/training/GeneticTrainer').Checkpoint;
+    return JSON.parse(data) as import('../src/ai/training/GeneticTrainer').Checkpoint;
   }
 
   // Main training function

@@ -6,9 +6,6 @@ import type { ObstacleData, RectObstacle, CircleObstacle } from '../types';
 import { PLAYER_COLORS } from '../types';
 import { PARTICLE_CONFIG, PLAYER_CONFIG, RENDER_CONFIG } from '../config';
 
-// Height of the power bar at the top
-export const POWER_BAR_HEIGHT = 40;
-
 export class NetworkRenderer {
   private ctx: CanvasRenderingContext2D;
   private canvas: HTMLCanvasElement;
@@ -48,7 +45,7 @@ export class NetworkRenderer {
    */
   resize(width: number, height: number): void {
     this.canvas.width = width;
-    this.canvas.height = height + POWER_BAR_HEIGHT;
+    this.canvas.height = height;
   }
 
   /**
@@ -59,13 +56,6 @@ export class NetworkRenderer {
     this.ctx.fillStyle = RENDER_CONFIG.backgroundColor;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Draw power bar
-    this.drawPowerBar(frame);
-
-    // Translate for game area
-    this.ctx.save();
-    this.ctx.translate(0, POWER_BAR_HEIGHT);
-
     // Draw obstacles
     this.drawObstacles();
 
@@ -74,45 +64,6 @@ export class NetworkRenderer {
 
     // Draw player cursors
     this.drawPlayers(frame);
-
-    this.ctx.restore();
-  }
-
-  /**
-   * Draw the power distribution bar at the top
-   */
-  private drawPowerBar(frame: FrameData): void {
-    const totalParticles = frame.particles.length;
-    if (totalParticles === 0) return;
-
-    const barHeight = POWER_BAR_HEIGHT - 4;
-    const barY = 2;
-
-    // Calculate cumulative widths
-    let x = 0;
-    for (const player of frame.players) {
-      const ratio = player.particleCount / totalParticles;
-      const width = ratio * this.canvas.width;
-
-      const color = this.getPlayerColor(player.colorIndex);
-      this.ctx.fillStyle = color;
-      this.ctx.fillRect(x, barY, width, barHeight);
-
-      x += width;
-    }
-
-    // Draw separator lines
-    this.ctx.strokeStyle = '#000';
-    this.ctx.lineWidth = 1;
-    x = 0;
-    for (let i = 0; i < frame.players.length - 1; i++) {
-      const ratio = frame.players[i].particleCount / totalParticles;
-      x += ratio * this.canvas.width;
-      this.ctx.beginPath();
-      this.ctx.moveTo(x, barY);
-      this.ctx.lineTo(x, barY + barHeight);
-      this.ctx.stroke();
-    }
   }
 
   /**

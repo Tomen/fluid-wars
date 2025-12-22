@@ -1,17 +1,16 @@
 // Game class to coordinate all game systems
 
 import type { GameConfig, Vec2, WinConfig } from './types';
-import type { ScenarioConfig } from './scenario';
-import { spawnParticlePositions } from './scenario';
+import type { ScenarioConfig } from './game/scenario';
+import { spawnParticlePositions } from './game/scenario';
 import { Particle } from './particle';
 import { Obstacle } from './obstacle';
 import { Player } from './player';
 import { InputManager } from './input';
 import { SpatialHash } from './collision';
-import { ConversionSystem } from './conversion';
+import { ConversionSystem } from './game/conversion';
 import { PLAYER_COLORS } from './types';
 import { PARTICLE_CONFIG, OBSTACLE_CONFIG, WIN_CONFIG } from './config';
-import { POWER_BAR_HEIGHT } from './renderer';
 import type { AIController } from './ai/AIController';
 import { AsyncNeuralAI } from './ai/AsyncNeuralAI';
 import { RandomGenerator } from './maze/RandomGenerator';
@@ -214,9 +213,8 @@ export class Game {
         // Player 1 - mouse takes priority, fallback to keyboard
         const mousePos = this.input.getMousePosition();
         if (mousePos) {
-          // Offset Y by power bar height to convert canvas coords to game coords
-          const gameY = mousePos.y - POWER_BAR_HEIGHT;
-          player.setCursor(mousePos.x, gameY, this.canvasWidth, this.canvasHeight);
+          // Canvas now represents only game area (power bar is DOM-based)
+          player.setCursor(mousePos.x, mousePos.y, this.canvasWidth, this.canvasHeight);
         } else {
           const input = this.input.getPlayerInput(i);
           player.moveCursor(input, dt, this.canvasWidth, this.canvasHeight);

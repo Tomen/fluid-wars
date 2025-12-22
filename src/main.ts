@@ -3,7 +3,7 @@
 import type { AppState, GameConfig, ObstacleData } from './types';
 import { PLAYER_COLOR_NAMES } from './types';
 import { Game } from './game';
-import { Renderer, POWER_BAR_HEIGHT } from './renderer';
+import { Renderer } from './renderer';
 import { GAME_CONFIG, GAME_LOOP_CONFIG, AI_CONFIG } from './config';
 import { AggressiveAI, RandomAI } from './ai/AIController';
 import { NeuralAI } from './ai/NeuralAI';
@@ -18,17 +18,22 @@ import {
   type UIData,
   PerformancePanel,
   GameInfoPanel,
-  PowerBarPanel,
   AIInfoPanel,
   AIObservationPanel,
   VictoryPanel,
   ObserverInfoPanel,
 } from './ui';
 import { GameClient, type ScenarioResult } from './network/GameClient';
-import { NetworkRenderer, POWER_BAR_HEIGHT as NETWORK_POWER_BAR_HEIGHT } from './ui/NetworkRenderer';
+import { NetworkRenderer } from './ui/NetworkRenderer';
 import type { FrameData } from './network/protocol';
-import type { ScenarioConfig } from './scenario';
+import type { ScenarioConfig } from './game/scenario';
 import * as yaml from 'js-yaml';
+
+// New UI components
+import { LayoutManager } from './ui/LayoutManager';
+import { Console as GameConsole } from './ui/Console';
+import { PowerBar } from './ui/PowerBar';
+import { StatusPanel } from './ui/StatusPanel';
 
 // Import balance test scenarios using Vite's glob import
 const balanceScenarioModules = import.meta.glob('../scenarios/balance/*.yaml', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
@@ -50,6 +55,7 @@ function loadBalanceScenarios(): ScenarioConfig[] {
 class App {
   private state: AppState = 'playing'; // Start in playing state for now
   private canvas: HTMLCanvasElement;
+  private uiArea: HTMLElement;
   private renderer: Renderer;
   private lastTime: number = 0;
   private accumulator: number = 0;
@@ -57,17 +63,25 @@ class App {
   private fps: number = 0;
   private fpsTime: number = 0;
 
+  // Layout manager
+  private layoutManager: LayoutManager;
+
+  // New DOM-based UI components
+  private powerBar: PowerBar;
+  private statusPanel: StatusPanel;
+  private console: GameConsole;
+
   // Game state
   private game: Game | null = null;
 
   // AI metadata (for displaying generation info)
   private aiModelMetadata: ModelMetadata | null = null;
 
-  // AI observation overlay
+  // AI observation overlay (debug panels that overlay game)
   private showDebugPanels: boolean = false;
   private observationEncoder: ObservationEncoder;
 
-  // UI Manager
+  // UI Manager (for debug overlay panels)
   private ui: UIManager;
 
   // Observer mode (watching game running in worker)
@@ -86,46 +100,76 @@ class App {
   } | null = null;
 
   constructor() {
-    // Get canvas element
+    // Get DOM elements
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-    if (!this.canvas) {
-      throw new Error('Canvas element not found');
+    this.uiArea = document.getElementById('ui-area') as HTMLElement;
+    if (!this.canvas || !this.uiArea) {
+      throw new Error('Required DOM elements not found');
     }
 
-    // Resize canvas to fit window (with small padding)
-    const padding = 20;
-    this.canvas.width = window.innerWidth - padding * 2;
-    this.canvas.height = window.innerHeight - padding * 2;
+    // Initialize layout manager with game dimensions from config
+    this.layoutManager = new LayoutManager({
+      gameWidth: GAME_CONFIG.canvasWidth,
+      gameHeight: GAME_CONFIG.canvasHeight,
+      uiSize: 200,
+      padding: 10,
+    });
+
+    // Apply initial layout
+    this.layoutManager.applyToElements(this.canvas, this.uiArea);
+
+    // Handle window resize
+    this.layoutManager.onResize(() => {
+      this.handleResize();
+    });
 
     // Create renderer
     this.renderer = new Renderer(this.canvas);
 
-    // Create game with config
+    // Initialize new DOM-based UI components
+    this.powerBar = new PowerBar();
+    this.statusPanel = new StatusPanel();
+    this.console = new GameConsole();
+
+    // Setup console command handler
+    this.console.onCommand((cmd, args) => {
+      this.handleCommand(cmd, args);
+    });
+
+    // Welcome message
+    this.console.system('Welcome to Fluid Wars!');
+    this.console.info('Press V to toggle debug panels');
+
+    // Create game with config dimensions
     const config: GameConfig = {
       playerCount: GAME_CONFIG.playerCount,
       particlesPerPlayer: GAME_CONFIG.particlesPerPlayer
     };
 
-    this.game = new Game(config, this.renderer.width, this.renderer.gameHeight);
+    this.game = new Game(config, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
     this.game.setCanvas(this.canvas);
 
-    // Initialize observation encoder with actual canvas dimensions
+    // Initialize observation encoder with game dimensions
     this.observationEncoder = new ObservationEncoder({
-      canvasWidth: this.renderer.width,
-      canvasHeight: this.renderer.gameHeight
+      canvasWidth: GAME_CONFIG.canvasWidth,
+      canvasHeight: GAME_CONFIG.canvasHeight
     });
 
-    // Initialize UI Manager
+    // Initialize UI Manager for debug overlay panels
     this.ui = new UIManager();
-    this.setupUI();
+    this.setupDebugPanels();
 
     // Setup keyboard listeners
     window.addEventListener('keydown', (e) => {
+      // Ignore keyboard shortcuts if typing in console
+      if (this.console.isFocused()) {
+        return;
+      }
+
       if (e.key === 'r' || e.key === 'R') {
         if (this.state === 'gameover') {
           this.restartGame();
         } else if (this.state === 'observing') {
-          // Restart observer mode
           this.startObserverMode();
         }
       }
@@ -149,29 +193,61 @@ class App {
           this.stopObserverMode();
         }
       }
+      // Focus console with Enter or /
+      if (e.key === 'Enter' || e.key === '/') {
+        this.console.focus();
+        e.preventDefault();
+      }
     });
 
-    // Setup mouse click listener for UI panels
+    // Setup mouse click listener for debug panels
     this.canvas.addEventListener('click', (e) => {
       const rect = this.canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      // Scale from display coordinates to canvas native coordinates
+      const scaleX = this.canvas.width / rect.width;
+      const scaleY = this.canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
       this.ui.handleClick(x, y);
     });
 
-    console.log('Fluid Wars initialized');
-    console.log(`Canvas size: ${this.renderer.width}x${this.renderer.height}`);
+    this.console.system(`Game initialized (${GAME_CONFIG.canvasWidth}x${GAME_CONFIG.canvasHeight})`);
   }
 
-  private setupUI(): void {
-    // Configure responsive column layout
-    this.ui.setColumnLayout(POWER_BAR_HEIGHT + 10, 10);
+  private handleResize(): void {
+    // Just update layout - canvas resolution stays the same, only CSS display size changes
+    this.layoutManager.applyToElements(this.canvas, this.uiArea);
+  }
 
-    // Power bar at top (render first, behind everything)
-    this.ui.addPanel('powerBar', new PowerBarPanel(this.renderer.width));
+  private handleCommand(cmd: string, _args: string[]): void {
+    switch (cmd) {
+      case 'help':
+        this.console.info('Available commands:');
+        this.console.info('  /help - Show this help');
+        this.console.info('  /restart - Restart the game');
+        this.console.info('  /watch - Enter observer mode');
+        this.console.info('  /clear - Clear console');
+        break;
+      case 'restart':
+        this.restartGame();
+        break;
+      case 'watch':
+        this.startObserverMode();
+        break;
+      case 'clear':
+        this.console.clear();
+        break;
+      default:
+        this.console.error(`Unknown command: ${cmd}`);
+    }
+  }
+
+  private setupDebugPanels(): void {
+    // Configure responsive column layout for debug overlays
+    this.ui.setColumnLayout(10, 10);
 
     // Left column panels (will stack dynamically) - hidden by default, toggle with 'v'
-    const perfPanel = new PerformancePanel(10, POWER_BAR_HEIGHT + 10);
+    const perfPanel = new PerformancePanel(10, 10);
     perfPanel.setVisible(false);
     this.ui.addPanel('performance', perfPanel);
     this.ui.addToLeftColumn('performance');
@@ -193,10 +269,10 @@ class App {
     this.ui.addToRightColumn('aiObservation');
 
     // Victory panel (overlay, hidden by default) - not in a column
-    this.ui.addPanel('victory', new VictoryPanel(this.renderer.width, this.renderer.height));
+    this.ui.addPanel('victory', new VictoryPanel(GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight));
 
     // Observer info panel (visible only in observer mode)
-    const observerPanel = new ObserverInfoPanel(10, POWER_BAR_HEIGHT + 10);
+    const observerPanel = new ObserverInfoPanel(10, 10);
     observerPanel.setVisible(false);
     this.ui.addPanel('observerInfo', observerPanel);
   }
@@ -322,7 +398,7 @@ class App {
           // Update UI with observer data
           const observerUIData = this.buildObserverUIData();
           this.ui.update(observerUIData);
-          this.ui.render(this.renderer.ctx);
+          this.ui.render(this.renderer.getContext());
         } else {
           // Waiting for first frame - show loading
           this.renderer.drawBackground();
@@ -341,12 +417,85 @@ class App {
     }
     profiler.end('render');
 
-    // Update and render UI (only for regular game modes)
+    // Update DOM-based UI components
+    this.updateUIComponents();
+
+    // Update and render debug overlay panels (only for regular game modes)
     if (this.game && this.state !== 'observing') {
       const uiData = this.buildUIData();
       this.ui.update(uiData);
       this.ui.layoutColumns(this.renderer.width); // Reposition panels based on heights
-      this.ui.render(this.renderer.ctx);
+      this.ui.render(this.renderer.getContext());
+    }
+  }
+
+  private updateUIComponents(): void {
+    if (this.state === 'observing') {
+      // Observer mode - update from frame data
+      if (this.latestFrame && this.observerScenario) {
+        const frame = this.latestFrame;
+        const totalParticles = frame.players.reduce((sum, p) => sum + p.particleCount, 0);
+
+        // Update power bar
+        this.powerBar.update(frame.players.map((p, i) => ({
+          id: i,
+          color: this.observerPlayerColors[p.colorIndex] ?? '#888',
+          particleCount: p.particleCount,
+        })));
+
+        // Update status panel for observer mode
+        this.statusPanel.updateObserver(
+          {
+            scenarioName: this.observerScenario.name,
+            scenarioDescription: this.observerScenario.description,
+            currentStep: frame.step,
+            maxSteps: this.observerScenario.maxSteps,
+            gameOver: frame.gameOver,
+            winner: frame.winner,
+          },
+          frame.players.map((p, i) => ({
+            id: i,
+            color: this.observerPlayerColors[p.colorIndex] ?? '#888',
+            colorName: `Player ${i + 1}`,
+            particleCount: p.particleCount,
+            isAI: true,
+          })),
+          totalParticles
+        );
+      }
+    } else if (this.game) {
+      // Regular game mode
+      const players = this.game.getPlayers();
+      const particles = this.game.getParticles();
+      const winner = this.game.getWinnerPlayer();
+
+      // Update power bar
+      this.powerBar.update(players.map(p => ({
+        id: p.id,
+        color: p.color,
+        particleCount: p.particleCount,
+      })));
+
+      // Update status panel
+      this.statusPanel.updateGame({
+        mode: this.state === 'gameover' ? 'gameover' : 'playing',
+        players: players.map(p => ({
+          id: p.id,
+          color: p.color,
+          colorName: PLAYER_COLOR_NAMES[p.id % PLAYER_COLOR_NAMES.length],
+          particleCount: p.particleCount,
+          isAI: p.isAI,
+        })),
+        totalParticles: particles.length,
+        winner: winner ? {
+          id: winner.id,
+          color: winner.color,
+          colorName: PLAYER_COLOR_NAMES[winner.id % PLAYER_COLOR_NAMES.length],
+          particleCount: winner.particleCount,
+          isAI: winner.isAI,
+        } : undefined,
+        fps: this.fps,
+      });
     }
   }
 
@@ -437,6 +586,88 @@ class App {
     };
   }
 
+  /**
+   * Save balance test results to a downloadable JSON file
+   */
+  private saveBalanceTestResults(results: ScenarioResult[]): void {
+    // Build summary report
+    const report = {
+      timestamp: new Date().toISOString(),
+      summary: {
+        totalTests: results.length,
+        player0Wins: results.filter(r => r.winner === 0).length,
+        player1Wins: results.filter(r => r.winner === 1).length,
+        timeouts: results.filter(r => r.winner === -1).length,
+        avgSteps: Math.round(results.reduce((sum, r) => sum + r.steps, 0) / results.length),
+      },
+      results: results.map(r => ({
+        scenario: r.scenarioName,
+        winner: r.winner === -1 ? 'timeout' : `Player ${r.winner + 1}`,
+        steps: r.steps,
+        duration: `${r.duration.toFixed(1)}s`,
+        finalCounts: r.finalCounts,
+      })),
+      analysis: this.analyzeBalanceResults(results),
+    };
+
+    // Log to console for easy viewing
+    console.log('\n=== BALANCE TEST RESULTS ===');
+    console.log(JSON.stringify(report, null, 2));
+
+    // Trigger file download
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `balance-test-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Analyze balance test results to identify issues
+   */
+  private analyzeBalanceResults(results: ScenarioResult[]): string[] {
+    const analysis: string[] = [];
+
+    // Find corner vs open comparisons
+    const corner2to1 = results.find(r => r.scenarioName.includes('Corner') && r.scenarioName.includes('2:1'));
+    const open2to1 = results.find(r => r.scenarioName.includes('Open') && r.scenarioName.includes('2:1'));
+    const cornerEven = results.find(r => r.scenarioName.includes('Corner') && r.scenarioName.includes('Even'));
+    const openEven = results.find(r => r.scenarioName.includes('Open') && r.scenarioName.includes('Even'));
+
+    // Analyze 2:1 matchups
+    if (corner2to1 && open2to1) {
+      if (corner2to1.winner === 0 && open2to1.winner === 1) {
+        analysis.push('CORNER CAMPING DETECTED: Defender survives in corner but loses in open field');
+      }
+      if (corner2to1.steps > open2to1.steps * 1.5) {
+        analysis.push(`Corner extends game by ${Math.round((corner2to1.steps / open2to1.steps - 1) * 100)}% - defensive advantage too strong`);
+      }
+    }
+
+    // Analyze even matchups
+    if (cornerEven && openEven) {
+      if (cornerEven.winner !== openEven.winner) {
+        analysis.push(`Position matters: Corner favors P${(cornerEven.winner ?? 0) + 1}, Open favors P${(openEven.winner ?? 0) + 1}`);
+      }
+    }
+
+    // Check for timeouts
+    const timeouts = results.filter(r => r.winner === -1);
+    if (timeouts.length > 0) {
+      analysis.push(`${timeouts.length} timeout(s) - games taking too long to resolve`);
+    }
+
+    if (analysis.length === 0) {
+      analysis.push('No obvious balance issues detected');
+    }
+
+    return analysis;
+  }
+
   async restartGame(): Promise<void> {
     console.log('Restarting game...');
 
@@ -454,8 +685,10 @@ class App {
       particlesPerPlayer: GAME_CONFIG.particlesPerPlayer
     };
 
-    this.game = new Game(config, this.renderer.width, this.renderer.gameHeight);
+    this.game = new Game(config, GAME_CONFIG.canvasWidth, GAME_CONFIG.canvasHeight);
     this.game.setCanvas(this.canvas);
+
+    this.console.system('Game restarted');
 
     // Re-setup AI controllers
     if (AI_CONFIG.enabled) {
@@ -535,9 +768,6 @@ class App {
         }
         // Store player colors for UI
         this.observerPlayerColors = info.playerColors;
-        // Resize our canvas to match
-        this.canvas.width = info.canvasWidth;
-        this.canvas.height = info.canvasHeight + NETWORK_POWER_BAR_HEIGHT;
         // Clear game over state for new scenario
         this.observerGameOver = null;
       },
@@ -563,6 +793,8 @@ class App {
         if (this.observerQueue) {
           this.observerQueue.queueComplete = true;
         }
+        // Save results to file
+        this.saveBalanceTestResults(results);
       },
       onError: (error) => {
         console.error('Game client error:', error);

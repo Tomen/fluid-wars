@@ -74,8 +74,11 @@ export class InputManager {
     if (this.canvas) {
       this.mousemoveHandler = (e: MouseEvent) => {
         const rect = this.canvas!.getBoundingClientRect();
-        this.mouseX = e.clientX - rect.left;
-        this.mouseY = e.clientY - rect.top;
+        // Scale from display coordinates to canvas native coordinates
+        const scaleX = this.canvas!.width / rect.width;
+        const scaleY = this.canvas!.height / rect.height;
+        this.mouseX = (e.clientX - rect.left) * scaleX;
+        this.mouseY = (e.clientY - rect.top) * scaleY;
         this.mouseActive = true;
       };
       this.canvas.addEventListener('mousemove', this.mousemoveHandler);
@@ -96,8 +99,11 @@ export class InputManager {
     if (!this.headless && this.canvas) {
       this.mousemoveHandler = (e: MouseEvent) => {
         const rect = this.canvas!.getBoundingClientRect();
-        this.mouseX = e.clientX - rect.left;
-        this.mouseY = e.clientY - rect.top;
+        // Scale from display coordinates to canvas native coordinates
+        const scaleX = this.canvas!.width / rect.width;
+        const scaleY = this.canvas!.height / rect.height;
+        this.mouseX = (e.clientX - rect.left) * scaleX;
+        this.mouseY = (e.clientY - rect.top) * scaleY;
         this.mouseActive = true;
       };
       this.canvas.addEventListener('mousemove', this.mousemoveHandler);
