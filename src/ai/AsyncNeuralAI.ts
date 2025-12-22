@@ -81,7 +81,6 @@ export class AsyncNeuralAI implements AIController {
         const data = e.data;
 
         if (data.type === 'ready') {
-          console.log(`[AsyncNeuralAI] Worker ready for player ${this.playerId}`);
           this.workerReady = true;
           resolve();
         }

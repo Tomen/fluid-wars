@@ -10,3 +10,4 @@ export { PowerBarPanel } from './panels/PowerBarPanel';
 export { AIInfoPanel } from './panels/AIInfoPanel';
 export { AIObservationPanel } from './panels/AIObservationPanel';
 export { VictoryPanel } from './panels/VictoryPanel';
+export { ObserverInfoPanel } from './panels/ObserverInfoPanel';

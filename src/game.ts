@@ -1,6 +1,8 @@
 // Game class to coordinate all game systems
 
 import type { GameConfig, Vec2, WinConfig } from './types';
+import type { ScenarioConfig } from './scenario';
+import { spawnParticlePositions } from './scenario';
 import { Particle } from './particle';
 import { Obstacle } from './obstacle';
 import { Player } from './player';
@@ -36,12 +38,16 @@ export class Game {
   private readonly headless: boolean;
   private readonly winConfig: WinConfig;
 
+  // Optional scenario config for custom spawns
+  private readonly scenario?: ScenarioConfig;
+
   // AI controllers (one per AI player)
   private aiControllers: Map<number, AIController> = new Map();
 
-  constructor(config: GameConfig, canvasWidth: number, canvasHeight: number, headless: boolean = false, winConfig?: WinConfig) {
+  constructor(config: GameConfig, canvasWidth: number, canvasHeight: number, headless: boolean = false, winConfig?: WinConfig, scenario?: ScenarioConfig) {
     this.headless = headless;
     this.winConfig = winConfig || WIN_CONFIG;
+    this.scenario = scenario;
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     this.input = new InputManager(headless);
@@ -54,8 +60,10 @@ export class Game {
     // Create particles and assign to players
     this.initParticles(config);
 
-    // Create obstacles
-    this.initObstacles();
+    // Create obstacles (skip if scenario disables them)
+    if (!scenario || scenario.obstacles?.enabled !== false) {
+      this.initObstacles();
+    }
 
     // Only log in non-headless mode
     if (!this.headless) {
@@ -68,7 +76,10 @@ export class Game {
   private initPlayers(config: GameConfig): void {
     const { playerCount } = config;
 
-    // Spawn positions in an ellipse around the center for equidistant spacing
+    // Check if scenario provides custom spawn positions
+    const scenarioPlayers = this.scenario?.players;
+
+    // Spawn positions in an ellipse around the center for equidistant spacing (default)
     const margin = 150;
     const centerX = this.canvasWidth / 2;
     const centerY = this.canvasHeight / 2;
@@ -79,10 +90,10 @@ export class Game {
 
     // Generate equidistant spawn positions around the ellipse
     // Start at top (angle = -PI/2) so player 0 is at top
-    const spawnPositions: { x: number; y: number }[] = [];
+    const defaultSpawnPositions: { x: number; y: number }[] = [];
     for (let i = 0; i < playerCount; i++) {
       const angle = -Math.PI / 2 + (i * 2 * Math.PI) / playerCount;
-      spawnPositions.push({
+      defaultSpawnPositions.push({
         x: centerX + Math.cos(angle) * radiusX,
         y: centerY + Math.sin(angle) * radiusY,
       });
@@ -90,7 +101,10 @@ export class Game {
 
     for (let i = 0; i < playerCount; i++) {
       const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
-      const pos = spawnPositions[i];
+
+      // Use scenario spawn position if available, otherwise use default
+      const scenarioPlayer = scenarioPlayers?.find(p => p.id === i);
+      const pos = scenarioPlayer?.spawn ?? defaultSpawnPositions[i];
 
       this.players.push(new Player(i, color, false, pos.x, pos.y));
     }
@@ -98,28 +112,46 @@ export class Game {
 
   private initParticles(config: GameConfig): void {
     const { playerCount, particlesPerPlayer } = config;
+    const scenarioPlayers = this.scenario?.players;
 
-    // Spawn particles near each player's cursor
+    // Spawn particles for each player
     for (let playerId = 0; playerId < playerCount; playerId++) {
       const player = this.players[playerId];
-      const spawnRadius = PARTICLE_CONFIG.spawnRadius;
+      const scenarioPlayer = scenarioPlayers?.find(p => p.id === playerId);
 
-      for (let i = 0; i < particlesPerPlayer; i++) {
-        // Random angle and distance from cursor
-        const angle = Math.random() * Math.PI * 2;
-        const distance = Math.random() * spawnRadius;
+      // Check if scenario provides custom particle spawn config
+      if (scenarioPlayer?.particles) {
+        // Use scenario's custom particle spawn pattern
+        const positions = spawnParticlePositions(scenarioPlayer.particles);
+        for (const pos of positions) {
+          const particle = new Particle(pos.x, pos.y);
+          particle.owner = player.id;
+          particle.color = player.color;
+          this.particles.push(particle);
+        }
+        player.particleCount = scenarioPlayer.particles.count;
+      } else {
+        // Default: spawn particles near player's cursor (disk pattern)
+        const spawnRadius = PARTICLE_CONFIG.spawnRadius;
+        const count = scenarioPlayer?.particles?.count ?? particlesPerPlayer;
 
-        const x = player.cursorX + Math.cos(angle) * distance;
-        const y = player.cursorY + Math.sin(angle) * distance;
+        for (let i = 0; i < count; i++) {
+          // Random angle and distance from cursor
+          const angle = Math.random() * Math.PI * 2;
+          const distance = Math.random() * spawnRadius;
 
-        const particle = new Particle(x, y);
-        particle.owner = player.id;
-        particle.color = player.color;
+          const x = player.cursorX + Math.cos(angle) * distance;
+          const y = player.cursorY + Math.sin(angle) * distance;
 
-        this.particles.push(particle);
+          const particle = new Particle(x, y);
+          particle.owner = player.id;
+          particle.color = player.color;
+
+          this.particles.push(particle);
+        }
+
+        player.particleCount = count;
       }
-
-      player.particleCount = particlesPerPlayer;
     }
   }
 
@@ -368,10 +400,6 @@ export class Game {
     }
     this.aiControllers.set(playerId, controller);
     this.players[playerId].isAI = true;
-
-    if (!this.headless) {
-      console.log(`AI controller set for player ${playerId + 1}: ${controller.getName()}`);
-    }
   }
 
   /**

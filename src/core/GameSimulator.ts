@@ -4,6 +4,7 @@ import { Game } from '../game';
 import { Player } from '../player';
 import { Particle } from '../particle';
 import type { GameConfig } from '../types';
+import type { ScenarioConfig } from '../scenario';
 import type {
   GameState,
   StepResult,
@@ -26,9 +27,13 @@ export class GameSimulator {
   // Cached obstacle grid (fractional coverage, computed once per game)
   private cachedObstacleGrid: number[][] | null = null;
 
+  // Optional scenario config for custom spawns
+  private scenario?: ScenarioConfig;
+
   constructor(
     config: Partial<SimulatorConfig> = {},
-    rewardConfig: Partial<RewardConfig> = {}
+    rewardConfig: Partial<RewardConfig> = {},
+    scenario?: ScenarioConfig
   ) {
     // Merge with defaults
     this.config = {
@@ -50,6 +55,9 @@ export class GameSimulator {
       survivalReward: rewardConfig.survivalReward ?? 0.01,
     };
 
+    // Store scenario config
+    this.scenario = scenario;
+
     // Create the game
     this.game = this.createGame();
     this.initializePreviousCounts();
@@ -61,8 +69,15 @@ export class GameSimulator {
       particlesPerPlayer: this.config.particlesPerPlayer,
     };
 
-    // Pass headless=true to avoid browser dependencies, and optional winConfig
-    return new Game(gameConfig, this.config.canvasWidth, this.config.canvasHeight, true, this.config.winConfig);
+    // Pass headless=true to avoid browser dependencies, and optional winConfig and scenario
+    return new Game(
+      gameConfig,
+      this.config.canvasWidth,
+      this.config.canvasHeight,
+      true,
+      this.config.winConfig,
+      this.scenario
+    );
   }
 
   private initializePreviousCounts(): void {

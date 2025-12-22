@@ -1,0 +1,48 @@
+# Balance Test: Open Field Surrounded 2:1
+# Control test - same as corner but in center of map
+
+name: "Open 2:1"
+description: "Player 1 in center with 50 particles, Player 2 surrounding with 100 particles"
+
+game:
+  playerCount: 2
+  canvasWidth: 1200
+  canvasHeight: 800
+
+win:
+  mode: percentage
+  eliminationThreshold: 0
+  percentageThreshold: 0.95
+
+ai:
+  enabled: false
+
+obstacles:
+  enabled: false
+
+# Custom player spawn configuration
+players:
+  - id: 0
+    spawn: { x: 600, y: 400 }
+    particles:
+      count: 50
+      pattern: disk
+      center: { x: 600, y: 400 }
+      radius: 80
+
+  - id: 1
+    spawn: { x: 600, y: 400 }
+    particles:
+      count: 100
+      pattern: ring
+      center: { x: 600, y: 400 }
+      innerRadius: 100
+      radius: 200
+
+# Test runner configuration
+test:
+  cursorTargets:
+    - { x: 600, y: 400 }
+    - { x: 600, y: 400 }
+  maxSteps: 3600
+  runs: 5

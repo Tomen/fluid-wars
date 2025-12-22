@@ -58,10 +58,9 @@ conversion:
   threshold: 1.0         # progress required to convert
   decayMultiplier: 2     # decay rate multiplier when not being converted
                          # BALANCE: higher = defenders recover faster (currently 2x)
-  friendlySupportFactor: 0.4  # how much nearby friends help defend (1.0 = full, 0.5 = half)
+  friendlySupportFactor: 1  # how much nearby friends help defend (1.0 = full, 0.5 = half)
                          # BALANCE: defenderAdvantage = 1/factor (currently 1.43x)
                          # Formula: conversion triggers when enemies > friends × factor
-                         # TIP: reduce to 0.5 if defense is too strong
 
 # =============================================================================
 # PLAYER CONTROLS
@@ -129,7 +128,7 @@ render:
   # - solid: Hard circles (fastest, classic look)
   # - soft: Gradient circles that blend where they overlap
   # - glow: Same as soft but with additive blending (brighter overlaps)
-  particleStyle: 'soft'
+  particleStyle: 'solid'
   # Soft/glow settings
   shadowBlur: 6              # multiplier - gradient extends this many times the particle radius
   shadowAlpha: 1.0           # unused, kept for compatibility

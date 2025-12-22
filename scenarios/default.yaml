@@ -1,0 +1,35 @@
+# Default Game Scenario
+# Standard 8-player free-for-all with grid maze
+
+name: "Default Game"
+description: "Standard 8-player free-for-all with neural AI opponents"
+
+# Core game settings
+game:
+  playerCount: 8
+  particlesPerPlayer: 200
+  canvasWidth: 1600
+  canvasHeight: 900
+
+# Win condition
+win:
+  mode: percentage
+  eliminationThreshold: 0
+  percentageThreshold: 0.85
+
+# AI configuration
+ai:
+  enabled: true
+  aiPlayers: [1, 2, 3, 4, 5, 6, 7]
+  defaultAIType: neural
+  neuralDifficulty: easy
+  useWebWorker: true
+
+# Obstacle/maze configuration
+obstacles:
+  enabled: true
+  generator: grid
+  gridSpacing: 300
+  wallThickness: 30
+  gapSize: 80
+  wallProbability: 0.7

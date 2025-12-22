@@ -1,6 +1,6 @@
 // Fluid Wars - Main Application Entry Point
 
-import type { AppState, GameConfig } from './types';
+import type { AppState, GameConfig, ObstacleData } from './types';
 import { PLAYER_COLOR_NAMES } from './types';
 import { Game } from './game';
 import { Renderer, POWER_BAR_HEIGHT } from './renderer';
@@ -22,7 +22,30 @@ import {
   AIInfoPanel,
   AIObservationPanel,
   VictoryPanel,
+  ObserverInfoPanel,
 } from './ui';
+import { GameClient, type ScenarioResult } from './network/GameClient';
+import { NetworkRenderer, POWER_BAR_HEIGHT as NETWORK_POWER_BAR_HEIGHT } from './ui/NetworkRenderer';
+import type { FrameData } from './network/protocol';
+import type { ScenarioConfig } from './scenario';
+import * as yaml from 'js-yaml';
+
+// Import balance test scenarios using Vite's glob import
+const balanceScenarioModules = import.meta.glob('../scenarios/balance/*.yaml', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
+
+// Load all balance scenarios
+function loadBalanceScenarios(): ScenarioConfig[] {
+  const scenarios: ScenarioConfig[] = [];
+  for (const [path, content] of Object.entries(balanceScenarioModules)) {
+    try {
+      const scenario = yaml.load(content) as ScenarioConfig;
+      scenarios.push(scenario);
+    } catch (e) {
+      console.error(`Failed to load scenario from ${path}:`, e);
+    }
+  }
+  return scenarios;
+}
 
 class App {
   private state: AppState = 'playing'; // Start in playing state for now
@@ -46,6 +69,21 @@ class App {
 
   // UI Manager
   private ui: UIManager;
+
+  // Observer mode (watching game running in worker)
+  private gameClient: GameClient | null = null;
+  private networkRenderer: NetworkRenderer | null = null;
+  private latestFrame: FrameData | null = null;
+  private observerGameOver: { winner: number; stats: { steps: number; duration: number; finalCounts: number[] } } | null = null;
+  private observerScenario: { name: string; description?: string; maxSteps: number } | null = null;
+  private observerPlayerColors: string[] = [];
+  // Queue tracking
+  private observerQueue: {
+    scenarios: ScenarioConfig[];
+    currentIndex: number;
+    completedResults: Array<{ scenarioName: string; winner: number; steps: number }>;
+    queueComplete: boolean;
+  } | null = null;
 
   constructor() {
     // Get canvas element
@@ -86,6 +124,9 @@ class App {
       if (e.key === 'r' || e.key === 'R') {
         if (this.state === 'gameover') {
           this.restartGame();
+        } else if (this.state === 'observing') {
+          // Restart observer mode
+          this.startObserverMode();
         }
       }
       // Toggle all debug panels
@@ -95,6 +136,18 @@ class App {
         this.ui.setPanelVisible('gameInfo', this.showDebugPanels);
         this.ui.setPanelVisible('aiInfo', this.showDebugPanels);
         this.ui.setPanelVisible('aiObservation', this.showDebugPanels);
+      }
+      // Watch AI battle (observer mode)
+      if (e.key === 'w' || e.key === 'W') {
+        if (this.state !== 'observing') {
+          this.startObserverMode();
+        }
+      }
+      // Return to regular play mode
+      if (e.key === 'Escape') {
+        if (this.state === 'observing') {
+          this.stopObserverMode();
+        }
       }
     });
 
@@ -141,6 +194,11 @@ class App {
 
     // Victory panel (overlay, hidden by default) - not in a column
     this.ui.addPanel('victory', new VictoryPanel(this.renderer.width, this.renderer.height));
+
+    // Observer info panel (visible only in observer mode)
+    const observerPanel = new ObserverInfoPanel(10, POWER_BAR_HEIGHT + 10);
+    observerPanel.setVisible(false);
+    this.ui.addPanel('observerInfo', observerPanel);
   }
 
   async init(): Promise<void> {
@@ -179,12 +237,8 @@ class App {
               const asyncAI = new AsyncNeuralAI(playerId, model);
               await asyncAI.waitForReady();
               controller = asyncAI;
-              const genInfo = metadata.generation !== null ? ` gen ${metadata.generation}` : '';
-              console.log(`Player ${playerId + 1}: AsyncNeuralAI (${AI_CONFIG.neuralDifficulty}${genInfo}, worker)`);
             } else {
               controller = new NeuralAI(playerId, model);
-              const genInfo = metadata.generation !== null ? ` gen ${metadata.generation}` : '';
-              console.log(`Player ${playerId + 1}: NeuralAI (${AI_CONFIG.neuralDifficulty}${genInfo})`);
             }
 
             // Store metadata for UI display (only need to store once since all AI use same model)
@@ -234,12 +288,12 @@ class App {
   render(): void {
     // Clear and draw background
     profiler.start('render');
-    this.renderer.drawBackground();
 
     // Render based on state
     switch (this.state) {
       case 'playing':
       case 'gameover':
+        this.renderer.drawBackground();
         if (this.game) {
           // Draw particles first (behind obstacles)
           const conversionProgress = this.game.getConversionProgressMap();
@@ -251,11 +305,44 @@ class App {
           this.renderer.drawPlayers(this.game.getPlayers());
         }
         break;
+
+      case 'observing':
+        // Observer mode - render from network frames
+        if (this.networkRenderer && this.latestFrame) {
+          this.networkRenderer.renderFrame(this.latestFrame);
+
+          // Draw game over overlay if applicable
+          if (this.observerGameOver) {
+            this.networkRenderer.drawGameOver(
+              this.observerGameOver.winner,
+              this.observerGameOver.stats
+            );
+          }
+
+          // Update UI with observer data
+          const observerUIData = this.buildObserverUIData();
+          this.ui.update(observerUIData);
+          this.ui.render(this.renderer.ctx);
+        } else {
+          // Waiting for first frame - show loading
+          this.renderer.drawBackground();
+          const ctx = this.canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#fff';
+            ctx.font = '24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Loading...', this.canvas.width / 2, this.canvas.height / 2);
+            ctx.font = '16px sans-serif';
+            ctx.fillStyle = '#888';
+            ctx.fillText('Press Escape to return to game', this.canvas.width / 2, this.canvas.height / 2 + 40);
+          }
+        }
+        break;
     }
     profiler.end('render');
 
-    // Update and render UI
-    if (this.game) {
+    // Update and render UI (only for regular game modes)
+    if (this.game && this.state !== 'observing') {
       const uiData = this.buildUIData();
       this.ui.update(uiData);
       this.ui.layoutColumns(this.renderer.width); // Reposition panels based on heights
@@ -317,6 +404,39 @@ class App {
     };
   }
 
+  private buildObserverUIData(): UIData {
+    if (!this.latestFrame || !this.observerScenario) return {};
+
+    const frame = this.latestFrame;
+    const scenario = this.observerScenario;
+    const queue = this.observerQueue;
+
+    // Calculate total particles
+    const totalParticles = frame.players.reduce((sum, p) => sum + p.particleCount, 0);
+
+    return {
+      observerData: {
+        scenarioName: scenario.name,
+        scenarioDescription: scenario.description,
+        currentStep: frame.step,
+        maxSteps: scenario.maxSteps,
+        gameOver: frame.gameOver,
+        winner: frame.winner,
+        players: frame.players.map((p, index) => ({
+          id: index,
+          color: this.observerPlayerColors[p.colorIndex] ?? '#888888',
+          particleCount: p.particleCount,
+        })),
+        totalParticles,
+        // Queue info
+        scenarioIndex: queue?.currentIndex,
+        totalScenarios: queue?.scenarios.length,
+        completedResults: queue?.completedResults,
+        queueComplete: queue?.queueComplete,
+      },
+    };
+  }
+
   async restartGame(): Promise<void> {
     console.log('Restarting game...');
 
@@ -346,6 +466,161 @@ class App {
     this.setState('playing');
 
     console.log('Game restarted');
+  }
+
+  /**
+   * Start observer mode - watch AI battle running in worker
+   */
+  async startObserverMode(): Promise<void> {
+    console.log('Starting observer mode...');
+
+    // Clean up any existing observer mode (without restoring regular game)
+    this.cleanupObserverMode();
+
+    // Destroy any existing game
+    if (this.game) {
+      this.game.destroy();
+      this.game = null;
+    }
+
+    // Load balance test scenarios
+    const scenarios = loadBalanceScenarios();
+    if (scenarios.length === 0) {
+      console.error('No balance test scenarios found');
+      return;
+    }
+    console.log(`Loaded ${scenarios.length} balance test scenarios`);
+
+    // Initialize queue tracking
+    this.observerQueue = {
+      scenarios,
+      currentIndex: 0,
+      completedResults: [],
+      queueComplete: false,
+    };
+
+    // Create network renderer
+    this.networkRenderer = new NetworkRenderer(this.canvas);
+
+    // Create game client with callbacks
+    this.gameClient = new GameClient({
+      onReady: () => {
+        console.log('Game worker ready');
+      },
+      onScenarioLoaded: (scenario: ScenarioConfig, obstacles: ObstacleData[]) => {
+        console.log(`Scenario loaded: ${scenario.name}`);
+        if (this.networkRenderer) {
+          this.networkRenderer.setObstacles(obstacles);
+        }
+        // Update current scenario info for UI
+        this.observerScenario = {
+          name: scenario.name,
+          description: scenario.description,
+          maxSteps: scenario.test?.maxSteps ?? 3600,
+        };
+        // Update queue index
+        if (this.observerQueue) {
+          // Find the index of this scenario
+          const idx = this.observerQueue.scenarios.findIndex(s => s.name === scenario.name);
+          if (idx >= 0) {
+            this.observerQueue.currentIndex = idx;
+          }
+        }
+      },
+      onGameStart: (info) => {
+        console.log(`Game started: ${info.playerCount} players, ${info.canvasWidth}x${info.canvasHeight}`);
+        if (this.networkRenderer) {
+          this.networkRenderer.resize(info.canvasWidth, info.canvasHeight);
+          this.networkRenderer.setPlayerColors(info.playerColors);
+        }
+        // Store player colors for UI
+        this.observerPlayerColors = info.playerColors;
+        // Resize our canvas to match
+        this.canvas.width = info.canvasWidth;
+        this.canvas.height = info.canvasHeight + NETWORK_POWER_BAR_HEIGHT;
+        // Clear game over state for new scenario
+        this.observerGameOver = null;
+      },
+      onFrame: (frame: FrameData) => {
+        this.latestFrame = frame;
+      },
+      onGameOver: (winner, stats) => {
+        console.log(`Game over! Player ${winner + 1} wins in ${stats.steps} steps`);
+        this.observerGameOver = { winner, stats };
+      },
+      onScenarioComplete: (scenarioIndex: number, totalScenarios: number, result: ScenarioResult) => {
+        console.log(`Scenario ${scenarioIndex + 1}/${totalScenarios} complete: ${result.scenarioName}`);
+        if (this.observerQueue) {
+          this.observerQueue.completedResults.push({
+            scenarioName: result.scenarioName,
+            winner: result.winner,
+            steps: result.steps,
+          });
+        }
+      },
+      onQueueComplete: (results: ScenarioResult[]) => {
+        console.log('All scenarios complete!', results);
+        if (this.observerQueue) {
+          this.observerQueue.queueComplete = true;
+        }
+      },
+      onError: (error) => {
+        console.error('Game client error:', error);
+      },
+    });
+
+    // Connect to worker
+    await this.gameClient.connect();
+
+    // Store first scenario info for UI
+    const firstScenario = scenarios[0];
+    this.observerScenario = {
+      name: firstScenario.name,
+      description: firstScenario.description,
+      maxSteps: firstScenario.test?.maxSteps ?? 3600,
+    };
+
+    // Start the queue with 2 second delay between scenarios
+    this.gameClient.startQueue(scenarios, 2000);
+
+    // Switch to observing state
+    this.observerGameOver = null;
+    this.latestFrame = null;
+    this.setState('observing');
+
+    // Show observer info panel
+    this.ui.setPanelVisible('observerInfo', true);
+
+    console.log('Observer mode started');
+  }
+
+  /**
+   * Clean up observer mode resources (without restoring game)
+   */
+  private cleanupObserverMode(): void {
+    // Hide observer info panel
+    this.ui.setPanelVisible('observerInfo', false);
+
+    if (this.gameClient) {
+      this.gameClient.disconnect();
+      this.gameClient = null;
+    }
+    this.networkRenderer = null;
+    this.latestFrame = null;
+    this.observerGameOver = null;
+    this.observerScenario = null;
+    this.observerPlayerColors = [];
+    this.observerQueue = null;
+  }
+
+  /**
+   * Stop observer mode and return to regular play
+   */
+  async stopObserverMode(): Promise<void> {
+    this.cleanupObserverMode();
+
+    // Restore regular game
+    await this.restartGame();
   }
 
   loop(timestamp: number): void {

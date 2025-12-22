@@ -120,11 +120,14 @@ interface YamlConfig {
 // Load config based on environment
 let config: YamlConfig;
 
-// Check if we're in a browser environment
-const isBrowser = typeof window !== 'undefined';
+// Check if we're in Node.js (has process.versions.node)
+// This correctly handles: browser main thread, web workers, AND Node.js
+const isNode = typeof process !== 'undefined'
+  && process.versions != null
+  && process.versions.node != null;
 
-if (isBrowser) {
-  // Browser - Vite transforms this import at build time via yaml plugin
+if (!isNode) {
+  // Browser or Web Worker - Vite transforms this import at build time via yaml plugin
   // @ts-ignore - Vite handles yaml imports
   const yamlModule = await import('../config.yaml');
   config = yamlModule.default as YamlConfig;

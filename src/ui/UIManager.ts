@@ -41,6 +41,30 @@ export interface UIData {
   }>;
   canvasWidth?: number;
   canvasHeight?: number;
+  // Observer mode data
+  observerData?: {
+    scenarioName: string;
+    scenarioDescription?: string;
+    currentStep: number;
+    maxSteps: number;
+    gameOver: boolean;
+    winner: number;
+    players: Array<{
+      id: number;
+      color: string;
+      particleCount: number;
+    }>;
+    totalParticles: number;
+    // Queue info
+    scenarioIndex?: number;
+    totalScenarios?: number;
+    completedResults?: Array<{
+      scenarioName: string;
+      winner: number;
+      steps: number;
+    }>;
+    queueComplete?: boolean;
+  };
 }
 
 export class UIManager {

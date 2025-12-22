@@ -1,0 +1,48 @@
+# Balance Test: Corner Even Numbers
+# Test corner defense with equal numbers
+
+name: "Corner Even"
+description: "Player 1 in corner with 100 particles, Player 2 surrounding with 100 particles"
+
+game:
+  playerCount: 2
+  canvasWidth: 1200
+  canvasHeight: 800
+
+win:
+  mode: percentage
+  eliminationThreshold: 0
+  percentageThreshold: 0.95
+
+ai:
+  enabled: false
+
+obstacles:
+  enabled: false
+
+# Custom player spawn configuration
+players:
+  - id: 0
+    spawn: { x: 50, y: 50 }
+    particles:
+      count: 100
+      pattern: disk
+      center: { x: 50, y: 50 }
+      radius: 80
+
+  - id: 1
+    spawn: { x: 50, y: 50 }
+    particles:
+      count: 100
+      pattern: ring
+      center: { x: 50, y: 50 }
+      innerRadius: 100
+      radius: 200
+
+# Test runner configuration
+test:
+  cursorTargets:
+    - { x: 50, y: 50 }
+    - { x: 50, y: 50 }
+  maxSteps: 3600
+  runs: 5

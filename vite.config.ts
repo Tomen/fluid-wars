@@ -10,4 +10,9 @@ export default defineConfig({
   esbuild: {
     target: 'esnext',
   },
+  worker: {
+    // Apply same plugins to workers so they can import yaml files
+    plugins: () => [yaml()],
+    format: 'es',
+  },
 });

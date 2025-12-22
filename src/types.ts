@@ -7,7 +7,7 @@ export interface Vec2 {
 }
 
 // Application states
-export type AppState = 'menu' | 'setup' | 'playing' | 'paused' | 'gameover' | 'editor';
+export type AppState = 'menu' | 'setup' | 'playing' | 'paused' | 'gameover' | 'editor' | 'observing';
 
 // Game configuration
 export interface GameConfig {

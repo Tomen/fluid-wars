@@ -10,7 +10,8 @@
     "train": "node --import tsx training/train.ts",
     "train:stop": "echo. > training/checkpoints/STOP",
     "train:check": "tsc --project tsconfig.training.json --noEmit",
-    "sync-model": "node --import tsx scripts/sync-model.ts"
+    "sync-model": "node --import tsx scripts/sync-model.ts",
+    "balance-test": "node --import tsx src/testing/balance-test.ts"
   },
   "devDependencies": {
     "@modyfi/vite-plugin-yaml": "^1.1.1",

@@ -329,7 +329,6 @@ async function initWasm(): Promise<void> {
 
   await tf.setBackend('wasm');
   await tf.ready();
-  console.log('[AI Worker] WASM backend initialized with path:', basePath);
 }
 
 /**
@@ -350,8 +349,6 @@ self.onmessage = async (e: MessageEvent<AIWorkerMessage>) => {
       model = createModel(cnnConfig);
       const weights = new Float32Array(data.modelWeights);
       setWeights(model, weights);
-
-      console.log('[AI Worker] Model loaded with', data.modelWeights.length, 'weights');
 
       const response: AIWorkerReadyResponse = { type: 'ready' };
       self.postMessage(response);
@@ -378,11 +375,6 @@ self.onmessage = async (e: MessageEvent<AIWorkerMessage>) => {
       const predictTime = performance.now() - predictStart;
 
       const totalTime = performance.now() - start;
-
-      // Log timing breakdown occasionally (every 60 frames)
-      if (Math.random() < 0.017) {
-        console.log(`[AI Worker ${data.playerId}] particles=${data.particles.length} encode=${encodeTime.toFixed(1)}ms predict=${predictTime.toFixed(1)}ms total=${totalTime.toFixed(1)}ms`);
-      }
 
       const response: AIWorkerActionResponse = {
         type: 'action',
